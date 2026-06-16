@@ -5,6 +5,7 @@ import { GameMap, GameState, Direction, CargoType, CargoConfig, EngineType, Wall
 import { GRID_SIZE, TICK_RATE, DEFAULT_CARGO_TYPES } from '../constants';
 import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Download, Gauge, Eye, EyeOff } from 'lucide-react';
 import { generateOpenSCAD } from '../services/openscadService';
+import { getSegmentOrigin, moveTrain } from '../game/trainMovement';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PlayProps {
@@ -116,71 +117,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
   }, [handleKeyDown]);
 
   const moveTrainLogic = useCallback((s: GameState): GameState => {
-    if (s.isGameOver || s.isLevelComplete) return s;
-
-    const newDirection = s.nextDirection;
-    const head = s.train[0];
-    let newHead = { ...head };
-
-    if (newDirection === 'UP') newHead.y -= 1;
-    if (newDirection === 'DOWN') newHead.y += 1;
-    if (newDirection === 'LEFT') newHead.x -= 1;
-    if (newDirection === 'RIGHT') newHead.x += 1;
-
-    // Check bounds
-    if (newHead.x < 0 || newHead.x >= map.width || newHead.y < 0 || newHead.y >= map.height) {
-      return { ...s, isGameOver: true };
-    }
-
-    const cell = map.grid[newHead.y][newHead.x];
-
-    // Check collisions
-    if (cell === 'WALL') return { ...s, isGameOver: true };
-    if (s.train.some(p => p.x === newHead.x && p.y === newHead.y)) return { ...s, isGameOver: true };
-    
-    if (cell === 'GATE') {
-      if (s.collectedCount === s.totalCargoCount) {
-        return { ...s, isLevelComplete: true };
-      } else {
-        return { ...s, isGameOver: true }; // Hit gate before it's open
-      }
-    }
-
-    let newTrain = [newHead, ...s.train];
-    let newCarriages = [...s.carriages];
-    let newCollectedCount = s.collectedCount;
-    let newScore = s.score;
-    let newCollectedCargoKeys = [...s.collectedCargoKeys];
-
-    const cargoKey = `${newHead.x},${newHead.y}`;
-    const isActuallyCargo = cell === 'CARGO' && !s.collectedCargoKeys.includes(cargoKey);
-
-    if (isActuallyCargo) {
-      newCollectedCount++;
-      newScore += 100;
-      newCollectedCargoKeys.push(cargoKey);
-      
-      // Find which cargo it was
-      const config = map.cargoConfigs[cargoKey];
-      let cargoId = config?.cargoId;
-      if (!cargoId || config.type === 'RANDOM') {
-        cargoId = cargoTypes[Math.floor(Math.random() * cargoTypes.length)].id;
-      }
-      newCarriages.push(cargoId);
-    } else {
-      newTrain.pop();
-    }
-
-    return {
-      ...s,
-      lastTrain: [...s.train],
-      train: newTrain,
-      direction: newDirection,
-      carriages: newCarriages,
-      collectedCount: newCollectedCount,
-      score: newScore,
-      collectedCargoKeys: newCollectedCargoKeys,
-    };
+    return moveTrain(s, map, cargoTypes);
   }, [map, cargoTypes]);
 
   const draw = useCallback(() => {
@@ -294,11 +231,12 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
     });
 
     // Draw Train in reverse order (last carriage first, engine last) to ensure correct layering
+    const renderProgress = Math.min(state.moveProgress, 1);
     for (let i = state.train.length - 1; i >= 0; i--) {
       const p = state.train[i];
-      const lastP = state.lastTrain[i] || p;
-      const px = (lastP.x + (p.x - lastP.x) * state.moveProgress) * GRID_SIZE;
-      const py = (lastP.y + (p.y - lastP.y) * state.moveProgress) * GRID_SIZE;
+      const lastP = getSegmentOrigin(state.train, state.lastTrain, i);
+      const px = (lastP.x + (p.x - lastP.x) * renderProgress) * GRID_SIZE;
+      const py = (lastP.y + (p.y - lastP.y) * renderProgress) * GRID_SIZE;
       
       // Determine direction for this segment based on its actual movement
       let segmentDir: Direction = state.direction;
@@ -364,19 +302,14 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
       setState(s => {
         if (!s) return s;
         let newProgress = s.moveProgress + (deltaTime / tickRateRef.current);
-        
-        if (newProgress >= 1) {
-          const nextState = moveTrainLogic(s);
-          return {
-            ...nextState,
-            moveProgress: newProgress - 1
-          };
+        let current = s;
+
+        while (newProgress >= 1 && !current.isGameOver && !current.isLevelComplete) {
+          current = moveTrainLogic(current);
+          newProgress -= 1;
         }
-        
-        return {
-          ...s,
-          moveProgress: newProgress
-        };
+
+        return { ...current, moveProgress: newProgress };
       });
     }
 
