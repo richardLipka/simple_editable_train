@@ -236,8 +236,7 @@ npm run lint     # TypeScript check (tsc --noEmit)
 **Vite config highlights:**
 
 - `@/` path alias to project root
-- `GEMINI_API_KEY` injected via `define` (not used in current `src/` code)
-- HMR can be disabled via `DISABLE_HMR=true` (AI Studio environment)
+- HMR can be disabled via `DISABLE_HMR=true`
 
 ## Dependencies vs. Actual Usage
 
@@ -246,7 +245,7 @@ Several `package.json` dependencies are listed but **not referenced in `src/`**:
 | Package | Status |
 |---------|--------|
 | `express`, `better-sqlite3` | Not used — no backend |
-| `@google/genai`, `dotenv` | Not used — no AI calls in app code |
+| `dotenv` | Not used in current `src/` code |
 | `clsx`, `tailwind-merge` | Not used in current components |
 
 The application is fully functional as a static SPA without these.
@@ -283,7 +282,6 @@ Likely places for future work:
 
 1. **Load `defaultData.json` on first run** — replace hardcoded `INITIAL_MAP` seed
 2. **Backend / API** — `express` + `better-sqlite3` are already in dependencies
-3. **AI features** — `GEMINI_API_KEY` wiring exists in Vite config
-4. **React Router** — if URL-based navigation is needed beyond mode switching
-5. **Shared canvas utilities** — Play and Editor duplicate grid rendering logic
-6. **GameState extraction** — move `moveTrainLogic` to a testable pure module
+3. **React Router** — if URL-based navigation is needed beyond mode switching
+4. **Shared canvas utilities** — Play and Editor duplicate grid rendering logic
+5. **Game logic tests** — expand coverage in `src/game/trainMovement.ts`

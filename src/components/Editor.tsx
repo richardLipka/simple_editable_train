@@ -1,8 +1,11 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameMap, CellType, Direction, CargoType, CargoConfig, EngineType, WallType, SystemAssets } from '../types';
 import { GRID_SIZE } from '../constants';
+import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
+import { createGridBackground } from '../utils/canvasBackground';
+import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { 
   Save, Trash2, Plus, ArrowLeft, Package, Square, LogOut, Play, 
   Settings, MousePointer2, Box, Circle, Triangle, Eraser, BrickWall,
@@ -49,29 +52,25 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
   const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
   const [dragCurrent, setDragCurrent] = useState<{ x: number, y: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageCache = useRef<Record<string, HTMLImageElement>>({});
+  const imageCache = getImageCache();
+  const wallById = useMemo(() => createIdMap(walls), [walls]);
+  const cargoById = useMemo(() => createIdMap(cargoTypes), [cargoTypes]);
+  const selectedEngine = useMemo(
+    () => engines.find((e) => e.id === map.selectedEngineId) || engines[0],
+    [engines, map.selectedEngineId],
+  );
+  const gridBackground = useMemo(
+    () => createGridBackground(map.width * GRID_SIZE, map.height * GRID_SIZE, map.width, map.height),
+    [map.width, map.height],
+  );
 
-  // Preload images
   useEffect(() => {
-    const allAssets = [
-      ...cargoTypes.map(c => c.cargoImage),
-      ...engines.map(e => e.image),
-      ...walls.map(w => w.image),
-      systemAssets.startImage,
-      systemAssets.gateOpenImage,
-      systemAssets.gateClosedImage,
-      systemAssets.randomCargoImage,
-    ].filter(Boolean) as string[];
-
-    allAssets.forEach(src => {
-      if (!imageCache.current[src]) {
-        const img = new Image();
-        img.src = src;
-        img.onload = () => draw();
-        imageCache.current[src] = img;
-      }
-    });
-  }, [cargoTypes, engines, walls]);
+    preloadImages(
+      collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, {
+        includeCarriageImages: false,
+      }),
+    ).then(() => draw());
+  }, [cargoTypes, engines, walls, systemAssets]);
 
   const [hoveredTurnIndex, setHoveredTurnIndex] = useState<number | null>(null);
   const lastClickTime = useRef<number>(0);
@@ -352,24 +351,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#fdfaf6';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Grid lines
-    ctx.strokeStyle = '#17255411';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= map.width; x++) {
-      ctx.beginPath();
-      ctx.moveTo(x * GRID_SIZE, 0);
-      ctx.lineTo(x * GRID_SIZE, map.height * GRID_SIZE);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= map.height; y++) {
-      ctx.beginPath();
-      ctx.moveTo(0, y * GRID_SIZE);
-      ctx.lineTo(map.width * GRID_SIZE, y * GRID_SIZE);
-      ctx.stroke();
-    }
+    ctx.drawImage(gridBackground, 0, 0);
 
     // Draw generated path if enabled
     if (showPath && map.generatedPath) {
@@ -422,10 +404,10 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
 
         if (cell === 'WALL') {
           const wallId = map.wallConfigs?.[`${x},${y}`];
-          const wall = walls.find(w => w.id === wallId);
-          
-          if (wall?.image && imageCache.current[wall.image]) {
-            ctx.drawImage(imageCache.current[wall.image], px + 1, py + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+          const wall = wallId ? wallById.get(wallId) : undefined;
+
+          if (wall?.image && imageCache[wall.image]?.complete) {
+            ctx.drawImage(imageCache[wall.image], px + 1, py + 1, GRID_SIZE - 2, GRID_SIZE - 2);
           } else {
             ctx.fillStyle = '#172554';
             ctx.fillRect(px + 4, py + 4, GRID_SIZE - 8, GRID_SIZE - 8);
@@ -438,8 +420,8 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
             ctx.fillText(wall?.emoji || '🧱', px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 12);
           }
         } else if (cell === 'GATE') {
-          if (systemAssets.gateClosedImage && imageCache.current[systemAssets.gateClosedImage]) {
-            ctx.drawImage(imageCache.current[systemAssets.gateClosedImage], px, py, GRID_SIZE, GRID_SIZE);
+          if (systemAssets.gateClosedImage && imageCache[systemAssets.gateClosedImage]?.complete) {
+            ctx.drawImage(imageCache[systemAssets.gateClosedImage], px, py, GRID_SIZE, GRID_SIZE);
           } else {
             ctx.fillStyle = '#172554';
             ctx.beginPath();
@@ -451,13 +433,11 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
             ctx.fillText(systemAssets.gateClosedEmoji || 'EXIT', px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 8);
           }
         } else if (cell === 'START') {
-          const engine = engines.find(e => e.id === map.selectedEngineId) || engines[0];
           const px = x * GRID_SIZE;
           const py = y * GRID_SIZE;
-          
-          // Draw start position background if available
-          if (systemAssets.startImage && imageCache.current[systemAssets.startImage]) {
-            ctx.drawImage(imageCache.current[systemAssets.startImage], px, py, GRID_SIZE, GRID_SIZE);
+
+          if (systemAssets.startImage && imageCache[systemAssets.startImage]?.complete) {
+            ctx.drawImage(imageCache[systemAssets.startImage], px, py, GRID_SIZE, GRID_SIZE);
           } else if (systemAssets.startEmoji) {
             ctx.font = '32px serif';
             ctx.textAlign = 'center';
@@ -470,25 +450,28 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
           if (map.startDir === 'DOWN') ctx.rotate(Math.PI / 2);
           if (map.startDir === 'LEFT') ctx.rotate(Math.PI);
 
-          if (engine?.image && imageCache.current[engine.image]) {
-            ctx.drawImage(imageCache.current[engine.image], -GRID_SIZE / 2 + 1, -GRID_SIZE / 2 + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+          if (selectedEngine?.image && imageCache[selectedEngine.image]?.complete) {
+            ctx.drawImage(imageCache[selectedEngine.image], -GRID_SIZE / 2 + 1, -GRID_SIZE / 2 + 1, GRID_SIZE - 2, GRID_SIZE - 2);
           } else {
             ctx.fillStyle = '#fbbf24';
             ctx.fillRect(-GRID_SIZE / 2 + 1, -GRID_SIZE / 2 + 1, GRID_SIZE - 2, GRID_SIZE - 2);
             ctx.font = '32px serif';
             ctx.textAlign = 'center';
-            ctx.fillText(engine?.emoji || '🚂', 0, 12);
+            ctx.fillText(selectedEngine?.emoji || '🚂', 0, 12);
           }
           ctx.restore();
         } else if (cell === 'CARGO') {
           const config = map.cargoConfigs[`${x},${y}`];
-          const cargo = config?.type === 'SPECIFIC' ? cargoTypes.find(c => c.id === config.cargoId) : null;
+          const cargo =
+            config?.type === 'SPECIFIC' && config.cargoId
+              ? cargoById.get(config.cargoId)
+              : null;
           
           const cargoImage = cargo?.cargoImage || (config?.type === 'RANDOM' ? systemAssets.randomCargoImage : null);
           const cargoEmoji = cargo?.cargoEmoji || (config?.type === 'RANDOM' ? systemAssets.randomCargoEmoji : '❓');
 
-          if (cargoImage && imageCache.current[cargoImage]) {
-            ctx.drawImage(imageCache.current[cargoImage], px + 4, py + 4, GRID_SIZE - 8, GRID_SIZE - 8);
+          if (cargoImage && imageCache[cargoImage]?.complete) {
+            ctx.drawImage(imageCache[cargoImage], px + 4, py + 4, GRID_SIZE - 8, GRID_SIZE - 8);
           } else {
             ctx.fillStyle = '#3f3f46';
             ctx.fillRect(px + 1, py + 1, GRID_SIZE - 2, GRID_SIZE - 2);
@@ -559,7 +542,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
         }
       }
     }
-  }, [map, cargoTypes, engines, walls, isDragging, dragStart, dragCurrent, shapeTool, showPath]);
+  }, [map, wallById, cargoById, selectedEngine, gridBackground, isDragging, dragStart, dragCurrent, shapeTool, showPath, systemAssets]);
 
   useEffect(() => {
     draw();

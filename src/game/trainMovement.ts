@@ -28,7 +28,8 @@ export function moveTrain(
 
   const cell = map.grid[newHead.y][newHead.x];
   const cargoKey = `${newHead.x},${newHead.y}`;
-  const isActuallyCargo = cell === 'CARGO' && !s.collectedCargoKeys.includes(cargoKey);
+  const collectedCargo = new Set(s.collectedCargoKeys);
+  const isActuallyCargo = cell === 'CARGO' && !collectedCargo.has(cargoKey);
 
   if (cell === 'WALL') return { ...s, isGameOver: true };
 

@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const { t } = useTranslation();
   const [mode, setMode] = useState<'MENU' | 'PLAY' | 'EDITOR' | 'CARGO_CONFIG' | 'SETTINGS'>('MENU');
-  const [maps, setMaps] = useState<GameMap[]>([]);
+  const [maps, setMaps] = useState<GameMap[]>([INITIAL_MAP]);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
   const [editingMapIndex, setEditingMapIndex] = useState<number | null>(null);
   const [cargoTypes, setCargoTypes] = useState<CargoType[]>(DEFAULT_CARGO_TYPES);
@@ -19,34 +19,39 @@ export default function App() {
   const [walls, setWalls] = useState<WallType[]>(DEFAULT_WALLS);
   const [systemAssets, setSystemAssets] = useState<SystemAssets>(DEFAULT_SYSTEM_ASSETS);
 
-  // Load maps from localStorage
+  // Load persisted config after first paint to avoid startup jank
   useEffect(() => {
-    const savedMaps = localStorage.getItem('train_logic_maps');
-    if (savedMaps) {
-      setMaps(JSON.parse(savedMaps));
-    } else {
-      setMaps([INITIAL_MAP]);
-    }
+    const loadSaved = () => {
+      const savedMaps = localStorage.getItem('train_logic_maps');
+      if (savedMaps) {
+        setMaps(JSON.parse(savedMaps));
+      } else {
+        setMaps([INITIAL_MAP]);
+      }
 
-    const savedCargo = localStorage.getItem('train_logic_cargo');
-    if (savedCargo) {
-      setCargoTypes(JSON.parse(savedCargo));
-    }
+      const savedCargo = localStorage.getItem('train_logic_cargo');
+      if (savedCargo) {
+        setCargoTypes(JSON.parse(savedCargo));
+      }
 
-    const savedEngines = localStorage.getItem('train_logic_engines');
-    if (savedEngines) {
-      setEngines(JSON.parse(savedEngines));
-    }
+      const savedEngines = localStorage.getItem('train_logic_engines');
+      if (savedEngines) {
+        setEngines(JSON.parse(savedEngines));
+      }
 
-    const savedWalls = localStorage.getItem('train_logic_walls');
-    if (savedWalls) {
-      setWalls(JSON.parse(savedWalls));
-    }
+      const savedWalls = localStorage.getItem('train_logic_walls');
+      if (savedWalls) {
+        setWalls(JSON.parse(savedWalls));
+      }
 
-    const savedSystem = localStorage.getItem('train_logic_system');
-    if (savedSystem) {
-      setSystemAssets(JSON.parse(savedSystem));
-    }
+      const savedSystem = localStorage.getItem('train_logic_system');
+      if (savedSystem) {
+        setSystemAssets(JSON.parse(savedSystem));
+      }
+    };
+
+    const id = window.setTimeout(loadSaved, 0);
+    return () => window.clearTimeout(id);
   }, []);
 
   const saveMaps = (newMaps: GameMap[]) => {

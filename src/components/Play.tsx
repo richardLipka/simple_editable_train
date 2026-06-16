@@ -2,11 +2,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameMap, GameState, Direction, CargoType, CargoConfig, EngineType, WallType, SystemAssets } from '../types';
-import { GRID_SIZE, TICK_RATE, DEFAULT_CARGO_TYPES } from '../constants';
+import { GRID_SIZE, TICK_RATE } from '../constants';
 import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Download, Gauge, Eye, EyeOff } from 'lucide-react';
 import { generateOpenSCAD } from '../services/openscadService';
 import { getSegmentOrigin, moveTrain } from '../game/trainMovement';
+import { getImageCache, preloadImages } from '../utils/imagePreload';
+import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
+import { createGridBackground } from '../utils/canvasBackground';
+import { applyDirectionInput } from '../utils/directionInput';
 import { motion, AnimatePresence } from 'motion/react';
+
+const MAX_FRAME_DELTA_MS = 50;
+
+function needsHudUpdate(prev: GameState, next: GameState): boolean {
+  return (
+    prev.score !== next.score ||
+    prev.collectedCount !== next.collectedCount ||
+    prev.isGameOver !== next.isGameOver ||
+    prev.isLevelComplete !== next.isLevelComplete ||
+    prev.train.length !== next.train.length
+  );
+}
 
 interface PlayProps {
   map: GameMap;
@@ -24,34 +40,39 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
   const [state, setState] = useState<GameState | null>(null);
   const [showPath, setShowPath] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+
   const [tickRate, setTickRate] = useState(TICK_RATE);
   const tickRateRef = useRef(TICK_RATE);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastTickRef = useRef<number>(0);
-  const requestRef = useRef<number>(0);
-  const imageCache = useRef<Record<string, HTMLImageElement>>({});
+  const stateRef = useRef<GameState | null>(null);
+  const isPausedRef = useRef(false);
+  const assetsReadyRef = useRef(false);
+  const showPathRef = useRef(false);
+  const resetTimingRef = useRef(true);
+  const imageCache = getImageCache();
 
-  // Preload images
   useEffect(() => {
-    const allAssets = [
-      ...cargoTypes.map(c => c.cargoImage),
-      ...cargoTypes.map(c => c.carriageImage),
-      ...engines.map(e => e.image),
-      ...walls.map(w => w.image),
-      systemAssets.startImage,
-      systemAssets.gateOpenImage,
-      systemAssets.gateClosedImage,
-      systemAssets.randomCargoImage,
-    ].filter(Boolean) as string[];
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
-    allAssets.forEach(src => {
-      if (!imageCache.current[src]) {
-        const img = new Image();
-        img.src = src;
-        imageCache.current[src] = img;
+  useEffect(() => {
+    showPathRef.current = showPath;
+  }, [showPath]);
+
+  useEffect(() => {
+    let cancelled = false;
+    assetsReadyRef.current = false;
+
+    preloadImages(collectGameAssetUrls(cargoTypes, engines, walls, systemAssets)).then(() => {
+      if (!cancelled) {
+        assetsReadyRef.current = true;
       }
     });
-  }, [cargoTypes, engines, walls]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cargoTypes, engines, walls, systemAssets]);
 
   // Keep ref in sync with state for the animation loop
   useEffect(() => {
@@ -64,7 +85,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
       if (cell === 'CARGO') totalCargo++;
     }));
 
-    setState({
+    const newState: GameState = {
       currentLevelIndex: 0,
       score: 0,
       isGameOver: false,
@@ -78,23 +99,33 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
       collectedCount: 0,
       totalCargoCount: totalCargo,
       collectedCargoKeys: [],
-    });
+    };
+    stateRef.current = newState;
+    setState(newState);
     setIsPaused(false);
-    lastTickRef.current = performance.now();
+    isPausedRef.current = false;
+    resetTimingRef.current = true;
   }, [map]);
 
   useEffect(() => {
     initGame();
   }, [initGame]);
 
+  const setDirection = useCallback((direction: Direction) => {
+    const current = stateRef.current;
+    if (!current) return;
+    const next = applyDirectionInput(current, direction);
+    if (next) stateRef.current = next;
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (!state) return;
-    const { direction } = state;
+    const current = stateRef.current;
+    if (!current) return;
     switch (e.key) {
-      case 'ArrowUp': if (direction !== 'DOWN') setState(s => s ? { ...s, nextDirection: 'UP' } : null); break;
-      case 'ArrowDown': if (direction !== 'UP') setState(s => s ? { ...s, nextDirection: 'DOWN' } : null); break;
-      case 'ArrowLeft': if (direction !== 'RIGHT') setState(s => s ? { ...s, nextDirection: 'LEFT' } : null); break;
-      case 'ArrowRight': if (direction !== 'LEFT') setState(s => s ? { ...s, nextDirection: 'RIGHT' } : null); break;
+      case 'ArrowUp': setDirection('UP'); break;
+      case 'ArrowDown': setDirection('DOWN'); break;
+      case 'ArrowLeft': setDirection('LEFT'); break;
+      case 'ArrowRight': setDirection('RIGHT'); break;
       case ' ': 
       case 'p':
       case 'P':
@@ -109,222 +140,266 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
         setTickRate(prev => Math.max(50, prev - 10));
         break;
     }
-  }, [state]);
+  }, [setDirection]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  const moveTrainLogic = useCallback((s: GameState): GameState => {
-    return moveTrain(s, map, cargoTypes);
-  }, [map, cargoTypes]);
-
-  const draw = useCallback(() => {
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !state) return;
+    if (!canvas) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#fdfaf6';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const wallById = createIdMap<WallType>(walls);
+    const cargoById = createIdMap<CargoType>(cargoTypes);
+    const selectedEngine: EngineType | undefined =
+      engines.find((e) => e.id === map.selectedEngineId) || engines[0];
+    const gridBackground = createGridBackground(canvas.width, canvas.height, map.width, map.height);
 
-    // Draw grid lines (subtle pencil style)
-    ctx.strokeStyle = '#17255411';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= map.width; x++) {
-      ctx.beginPath();
-      ctx.moveTo(x * GRID_SIZE, 0);
-      ctx.lineTo(x * GRID_SIZE, canvas.height);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= map.height; y++) {
-      ctx.beginPath();
-      ctx.moveTo(0, y * GRID_SIZE);
-      ctx.lineTo(canvas.width, y * GRID_SIZE);
-      ctx.stroke();
-    }
+    let staticLayer: HTMLCanvasElement | null = null;
+    let staticLayerGateOpen: boolean | null = null;
 
-    // Draw Map
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        // Draw generated path if enabled
-        if (showPath && map.generatedPath) {
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
-          ctx.setLineDash([5, 5]);
-          ctx.lineWidth = 2;
-          map.generatedPath.forEach((p, i) => {
-            const px = p.x * GRID_SIZE + GRID_SIZE / 2;
-            const py = p.y * GRID_SIZE + GRID_SIZE / 2;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
+    const drawWallCell = (
+      target: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+    ) => {
+      const px = x * GRID_SIZE;
+      const py = y * GRID_SIZE;
+      const wallId = map.wallConfigs?.[`${x},${y}`];
+      const wall = wallId ? wallById.get(wallId) : undefined;
 
-        const cell = map.grid[y][x];
-        const px = x * GRID_SIZE;
-        const py = y * GRID_SIZE;
+      if (wall?.image && imageCache[wall.image]?.complete) {
+        target.drawImage(imageCache[wall.image], px, py, GRID_SIZE, GRID_SIZE);
+        return;
+      }
 
-        if (cell === 'WALL') {
-          const wallId = map.wallConfigs?.[`${x},${y}`];
-          const wall = walls.find(w => w.id === wallId);
-          
-          if (wall?.image && imageCache.current[wall.image]) {
-            ctx.drawImage(imageCache.current[wall.image], px, py, GRID_SIZE, GRID_SIZE);
-          } else {
-            ctx.fillStyle = '#172554';
-            ctx.fillRect(px, py, GRID_SIZE, GRID_SIZE);
-            ctx.font = '32px serif';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'white';
-            ctx.fillText(wall?.emoji || '🧱', px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 12);
-          }
-        } else if (cell === 'GATE') {
-          const isOpen = state.collectedCount === state.totalCargoCount;
-          const gateImage = isOpen ? systemAssets.gateOpenImage : systemAssets.gateClosedImage;
-          const gateEmoji = isOpen ? systemAssets.gateOpenEmoji : systemAssets.gateClosedEmoji;
+      target.fillStyle = '#172554';
+      target.fillRect(px, py, GRID_SIZE, GRID_SIZE);
+      target.font = '32px serif';
+      target.textAlign = 'center';
+      target.fillStyle = 'white';
+      target.fillText(wall?.emoji || '🧱', px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 12);
+    };
 
-          if (gateImage && imageCache.current[gateImage]) {
-            ctx.drawImage(imageCache.current[gateImage], px, py, GRID_SIZE, GRID_SIZE);
-          } else {
-            ctx.fillStyle = isOpen ? '#172554' : '#17255444';
-            ctx.beginPath();
-            ctx.roundRect(px + 4, py + 4, GRID_SIZE - 8, GRID_SIZE - 8, 8);
-            ctx.fill();
-            ctx.strokeStyle = '#172554';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.fillStyle = isOpen ? 'white' : '#172554';
-            ctx.font = '40px serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(gateEmoji, px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 14);
-          }
+    const drawGateCell = (
+      target: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      gateOpen: boolean,
+    ) => {
+      const px = x * GRID_SIZE;
+      const py = y * GRID_SIZE;
+      const gateImage = gateOpen ? systemAssets.gateOpenImage : systemAssets.gateClosedImage;
+      const gateEmoji = gateOpen ? systemAssets.gateOpenEmoji : systemAssets.gateClosedEmoji;
+
+      if (gateImage && imageCache[gateImage]?.complete) {
+        target.drawImage(imageCache[gateImage], px, py, GRID_SIZE, GRID_SIZE);
+        return;
+      }
+
+      target.fillStyle = gateOpen ? '#172554' : '#17255444';
+      target.beginPath();
+      target.roundRect(px + 4, py + 4, GRID_SIZE - 8, GRID_SIZE - 8, 8);
+      target.fill();
+      target.strokeStyle = '#172554';
+      target.lineWidth = 2;
+      target.stroke();
+      target.fillStyle = gateOpen ? 'white' : '#172554';
+      target.font = '40px serif';
+      target.textAlign = 'center';
+      target.fillText(gateEmoji, px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 14);
+    };
+
+    const buildStaticLayer = (gateOpen: boolean) => {
+      const layer = document.createElement('canvas');
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+      const layerCtx = layer.getContext('2d');
+      if (!layerCtx) return layer;
+
+      layerCtx.drawImage(gridBackground, 0, 0);
+
+      for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+          const cell = map.grid[y][x];
+          if (cell === 'WALL') drawWallCell(layerCtx, x, y);
+          if (cell === 'GATE') drawGateCell(layerCtx, x, y, gateOpen);
         }
       }
-    }
 
-    // Draw Cargo
-    Object.entries(map.cargoConfigs).forEach(([key, config]) => {
-      const [x, y] = key.split(',').map(Number);
-      const isCollected = state.collectedCargoKeys.includes(key);
-      if (!isCollected) {
+      return layer;
+    };
+
+    let frameId = 0;
+    let lastTime = performance.now();
+    let skipDelta = true;
+
+    const drawPathOverlay = () => {
+      if (!showPathRef.current || !map.generatedPath) return;
+
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
+      ctx.setLineDash([5, 5]);
+      ctx.lineWidth = 2;
+      map.generatedPath.forEach((p, i) => {
+        const px = p.x * GRID_SIZE + GRID_SIZE / 2;
+        const py = p.y * GRID_SIZE + GRID_SIZE / 2;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
+    const drawFrame = () => {
+      const gameState = stateRef.current;
+      if (!gameState) return;
+
+      const gateOpen = gameState.collectedCount === gameState.totalCargoCount;
+      if (!staticLayer || staticLayerGateOpen !== gateOpen) {
+        staticLayer = buildStaticLayer(gateOpen);
+        staticLayerGateOpen = gateOpen;
+      }
+
+      ctx.drawImage(staticLayer, 0, 0);
+      drawPathOverlay();
+
+      const collectedCargo = new Set(gameState.collectedCargoKeys);
+      for (const [key, config] of Object.entries(map.cargoConfigs)) {
+        if (collectedCargo.has(key)) continue;
+
+        const comma = key.indexOf(',');
+        const x = Number(key.slice(0, comma));
+        const y = Number(key.slice(comma + 1));
         const px = x * GRID_SIZE;
         const py = y * GRID_SIZE;
         const cargoConfig = config as CargoConfig;
-        const cargo = cargoConfig.type === 'SPECIFIC' ? cargoTypes.find(c => c.id === cargoConfig.cargoId) : null;
-        
-        const cargoImage = cargo?.cargoImage || (cargoConfig.type === 'RANDOM' ? systemAssets.randomCargoImage : null);
-        const cargoEmoji = cargo?.cargoEmoji || (cargoConfig.type === 'RANDOM' ? systemAssets.randomCargoEmoji : '🎁');
+        const cargo =
+          cargoConfig.type === 'SPECIFIC' && cargoConfig.cargoId
+            ? cargoById.get(cargoConfig.cargoId)
+            : null;
 
-        if (cargoImage && imageCache.current[cargoImage]) {
-          ctx.drawImage(imageCache.current[cargoImage], px, py, GRID_SIZE, GRID_SIZE);
+        const cargoImage =
+          cargo?.cargoImage ||
+          (cargoConfig.type === 'RANDOM' ? systemAssets.randomCargoImage : null);
+        const cargoEmoji =
+          cargo?.cargoEmoji ||
+          (cargoConfig.type === 'RANDOM' ? systemAssets.randomCargoEmoji : '🎁');
+
+        if (cargoImage && imageCache[cargoImage]?.complete) {
+          ctx.drawImage(imageCache[cargoImage], px, py, GRID_SIZE, GRID_SIZE);
         } else {
           ctx.font = '40px serif';
           ctx.textAlign = 'center';
           ctx.fillText(cargoEmoji, px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 14);
         }
       }
-    });
 
-    // Draw Train in reverse order (last carriage first, engine last) to ensure correct layering
-    const renderProgress = Math.min(state.moveProgress, 1);
-    for (let i = state.train.length - 1; i >= 0; i--) {
-      const p = state.train[i];
-      const lastP = getSegmentOrigin(state.train, state.lastTrain, i);
-      const px = (lastP.x + (p.x - lastP.x) * renderProgress) * GRID_SIZE;
-      const py = (lastP.y + (p.y - lastP.y) * renderProgress) * GRID_SIZE;
-      
-      // Determine direction for this segment based on its actual movement
-      let segmentDir: Direction = state.direction;
-      if (p.x > lastP.x) segmentDir = 'RIGHT';
-      else if (p.x < lastP.x) segmentDir = 'LEFT';
-      else if (p.y > lastP.y) segmentDir = 'DOWN';
-      else if (p.y < lastP.y) segmentDir = 'UP';
-      else if (i > 0) {
-        // If not moving (e.g. just spawned), use direction to previous segment
-        const prev = state.train[i - 1];
-        if (prev.x > p.x) segmentDir = 'RIGHT';
-        else if (prev.x < p.x) segmentDir = 'LEFT';
-        else if (prev.y > p.y) segmentDir = 'DOWN';
-        else if (prev.y < p.y) segmentDir = 'UP';
+      const renderProgress = Math.min(gameState.moveProgress, 1);
+      for (let i = gameState.train.length - 1; i >= 0; i--) {
+        const p = gameState.train[i];
+        const lastP = getSegmentOrigin(gameState.train, gameState.lastTrain, i);
+        const px = (lastP.x + (p.x - lastP.x) * renderProgress) * GRID_SIZE;
+        const py = (lastP.y + (p.y - lastP.y) * renderProgress) * GRID_SIZE;
+
+        let segmentDir: Direction = gameState.direction;
+        if (p.x > lastP.x) segmentDir = 'RIGHT';
+        else if (p.x < lastP.x) segmentDir = 'LEFT';
+        else if (p.y > lastP.y) segmentDir = 'DOWN';
+        else if (p.y < lastP.y) segmentDir = 'UP';
+        else if (i > 0) {
+          const prev = gameState.train[i - 1];
+          if (prev.x > p.x) segmentDir = 'RIGHT';
+          else if (prev.x < p.x) segmentDir = 'LEFT';
+          else if (prev.y > p.y) segmentDir = 'DOWN';
+          else if (prev.y < p.y) segmentDir = 'UP';
+        }
+
+        let rotation = 0;
+        if (segmentDir === 'UP') rotation = -Math.PI / 2;
+        if (segmentDir === 'DOWN') rotation = Math.PI / 2;
+        if (segmentDir === 'LEFT') rotation = Math.PI;
+
+        ctx.save();
+        ctx.translate(px + GRID_SIZE / 2, py + GRID_SIZE / 2);
+        ctx.rotate(rotation);
+
+        if (i === 0) {
+          if (selectedEngine?.image && imageCache[selectedEngine.image]?.complete) {
+            ctx.drawImage(imageCache[selectedEngine.image], -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+          } else {
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(-GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+            ctx.font = '40px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(selectedEngine?.emoji || '🚂', 0, 14);
+          }
+        } else {
+          const cargoType = cargoById.get(gameState.carriages[i - 1]);
+
+          if (cargoType?.carriageImage && imageCache[cargoType.carriageImage]?.complete) {
+            ctx.drawImage(imageCache[cargoType.carriageImage], -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+          } else {
+            ctx.fillStyle = cargoType?.color || '#555';
+            ctx.fillRect(-GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+            ctx.font = '32px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(cargoType?.carriageEmoji || '🚃', 0, 12);
+          }
+        }
+        ctx.restore();
+      }
+    };
+
+    const loop = (time: number) => {
+      if (resetTimingRef.current) {
+        resetTimingRef.current = false;
+        skipDelta = true;
+        lastTime = time;
       }
 
-      // Calculate rotation
-      let rotation = 0;
-      if (segmentDir === 'UP') rotation = -Math.PI / 2;
-      if (segmentDir === 'DOWN') rotation = Math.PI / 2;
-      if (segmentDir === 'LEFT') rotation = Math.PI;
+      let delta = time - lastTime;
+      lastTime = time;
 
-      ctx.save();
-      ctx.translate(px + GRID_SIZE / 2, py + GRID_SIZE / 2);
-      ctx.rotate(rotation);
-
-      if (i === 0) {
-        // Head
-        const engine = engines.find(e => e.id === map.selectedEngineId) || engines[0];
-        if (engine?.image && imageCache.current[engine.image]) {
-          ctx.drawImage(imageCache.current[engine.image], -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
-        } else {
-          ctx.fillStyle = '#fbbf24';
-          ctx.fillRect(-GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
-          ctx.font = '40px serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(engine?.emoji || '🚂', 0, 14);
-        }
+      if (skipDelta) {
+        skipDelta = false;
+        delta = 0;
       } else {
-        // Carriages
-        const cargoId = state.carriages[i - 1];
-        const cargoType = cargoTypes.find(c => c.id === cargoId);
-        
-        if (cargoType?.carriageImage && imageCache.current[cargoType.carriageImage]) {
-          ctx.drawImage(imageCache.current[cargoType.carriageImage], -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
-        } else {
-          ctx.fillStyle = cargoType?.color || '#555';
-          ctx.fillRect(-GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
-          ctx.font = '32px serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(cargoType?.carriageEmoji || '🚃', 0, 12);
-        }
+        delta = Math.min(delta, MAX_FRAME_DELTA_MS);
       }
-      ctx.restore();
-    }
-  }, [map, state, cargoTypes, engines, walls]);
 
-  const animate = useCallback((time: number) => {
-    const deltaTime = time - lastTickRef.current;
-    lastTickRef.current = time;
+      const paused = isPausedRef.current || !assetsReadyRef.current;
+      const current = stateRef.current;
 
-    if (!isPaused && state && !state.isGameOver && !state.isLevelComplete) {
-      setState(s => {
-        if (!s) return s;
-        let newProgress = s.moveProgress + (deltaTime / tickRateRef.current);
-        let current = s;
+      if (!paused && current && !current.isGameOver && !current.isLevelComplete) {
+        let newProgress = current.moveProgress + delta / tickRateRef.current;
+        let next = current;
 
-        while (newProgress >= 1 && !current.isGameOver && !current.isLevelComplete) {
-          current = moveTrainLogic(current);
+        while (newProgress >= 1 && !next.isGameOver && !next.isLevelComplete) {
+          next = moveTrain(next, map, cargoTypes);
           newProgress -= 1;
         }
 
-        return { ...current, moveProgress: newProgress };
-      });
-    }
+        const updated = { ...next, moveProgress: newProgress };
+        stateRef.current = updated;
 
-    draw();
-    requestRef.current = requestAnimationFrame(animate);
-  }, [isPaused, state, moveTrainLogic, draw]);
+        if (needsHudUpdate(current, updated)) {
+          setState(updated);
+        }
+      }
 
-  useEffect(() => {
-    requestRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(requestRef.current);
-  }, [animate]);
+      drawFrame();
+      frameId = requestAnimationFrame(loop);
+    };
 
-  useEffect(() => {
-    draw();
-  }, [draw]);
+    frameId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frameId);
+  }, [map, cargoTypes, engines, walls, systemAssets]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-[#fdfaf6] text-blue-950 p-4">
@@ -457,11 +532,11 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
       {/* Mobile Controls */}
       <div className="mt-8 grid grid-cols-3 gap-2 md:hidden">
         <div />
-        <button onClick={() => setState(s => s ? { ...s, nextDirection: 'UP' } : null)} className="sketch-button bg-white"><ArrowUp /></button>
+        <button onClick={() => setDirection('UP')} className="sketch-button bg-white"><ArrowUp /></button>
         <div />
-        <button onClick={() => setState(s => s ? { ...s, nextDirection: 'LEFT' } : null)} className="sketch-button bg-white"><ArrowLeft /></button>
-        <button onClick={() => setState(s => s ? { ...s, nextDirection: 'DOWN' } : null)} className="sketch-button bg-white"><ArrowDown /></button>
-        <button onClick={() => setState(s => s ? { ...s, nextDirection: 'RIGHT' } : null)} className="sketch-button bg-white"><ArrowRight /></button>
+        <button onClick={() => setDirection('LEFT')} className="sketch-button bg-white"><ArrowLeft /></button>
+        <button onClick={() => setDirection('DOWN')} className="sketch-button bg-white"><ArrowDown /></button>
+        <button onClick={() => setDirection('RIGHT')} className="sketch-button bg-white"><ArrowRight /></button>
       </div>
 
       <div className="mt-6 text-blue-900/40 text-sm font-mono">
