@@ -66,6 +66,7 @@ function dataFolderPlugin(): Plugin {
 }
 
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss(), dataFolderPlugin()],
   resolve: {
     alias: {

@@ -12,7 +12,7 @@ export interface PresetsManifest {
   presets: PresetEntry[];
 }
 
-const DATA_BASE = '/data';
+const DATA_BASE = `${import.meta.env.BASE_URL}data`.replace(/\/$/, '');
 
 export function isValidAppConfig(value: unknown): value is AppConfig {
   if (!value || typeof value !== 'object') return false;

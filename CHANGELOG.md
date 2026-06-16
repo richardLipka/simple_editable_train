@@ -5,6 +5,24 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-06-16
+
+### Added
+
+- Static web distribution package (`release/trains-fluent-1.0.0.zip`) for direct upload to any HTTP server
+- `npm run package:release` script to build and zip the production bundle
+- Relative asset paths (`base: './'`) so the game runs from a domain root or subdirectory
+
+### Changed
+
+- First stable public release
+- Preset data loads via `import.meta.env.BASE_URL` for portable deployment
+- Play screen overlays use CSS animations instead of Framer Motion (fewer devtools conflicts)
+
+### Fixed
+
+- Console errors from Reactime / browser extension `backend.bundle.js` on the play screen
+
 ## [0.3.0] - 2026-06-16
 
 ### Added
@@ -56,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.0.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/richardLipka/simple_editable_train/compare/v0.1.0...v0.1.1
