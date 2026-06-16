@@ -39,6 +39,53 @@
     box-shadow: 8px 8px 0px rgba(23, 37, 84, 0.1);
   }
 
+  @keyframes score-popup-rise {
+    from {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    to {
+      opacity: 0;
+      transform: translate(-50%, -56px);
+    }
+  }
+
+  .score-popup-floater {
+    animation-name: score-popup-rise;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes play-overlay-in {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .play-overlay-fade-in {
+    animation: play-overlay-in 0.25s ease-out forwards;
+  }
+
+  @keyframes play-gate-hint-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 8px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+
+  .play-gate-hint {
+    animation: play-gate-hint-in 0.2s ease-out forwards;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
   }

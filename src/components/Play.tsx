@@ -10,36 +10,9 @@ import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
 import { createGridBackground } from '../utils/canvasBackground';
 import { applyDirectionInput } from '../utils/directionInput';
-import { motion, AnimatePresence } from 'motion/react';
 
 const MAX_FRAME_DELTA_MS = 50;
 const SCORE_POPUP_DURATION_MS = 1000;
-const SCORE_POPUP_RISE_PX = 56;
-
-const ScorePopupFloater = React.memo(function ScorePopupFloater({
-  popup,
-  onComplete,
-}: {
-  popup: ScorePopup;
-  onComplete: (id: number) => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 1, y: 0 }}
-      animate={{ opacity: 0, y: -SCORE_POPUP_RISE_PX }}
-      transition={{ duration: SCORE_POPUP_DURATION_MS / 1000, ease: 'linear' }}
-      onAnimationComplete={() => onComplete(popup.id)}
-      className="absolute pointer-events-none font-black text-yellow-600 text-lg drop-shadow-sm -translate-x-1/2"
-      style={{
-        left: popup.x * GRID_SIZE + GRID_SIZE / 2,
-        top: popup.y * GRID_SIZE,
-      }}
-    >
-      +{popup.points}
-      {popup.comboMultiplier > 1 ? ` x${popup.comboMultiplier}` : ''}
-    </motion.div>
-  );
-});
 
 function needsHudUpdate(prev: GameState, next: GameState): boolean {
   return (
@@ -559,82 +532,78 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
           className="block"
         />
 
-        <AnimatePresence>
-          {scorePopups.map((popup) => (
-            <ScorePopupFloater key={popup.id} popup={popup} onComplete={dismissScorePopup} />
-          ))}
+        {scorePopups.map((popup) => (
+          <div
+            key={popup.id}
+            className="score-popup-floater absolute pointer-events-none font-black text-yellow-600 text-lg drop-shadow-sm"
+            style={{
+              left: popup.x * GRID_SIZE + GRID_SIZE / 2,
+              top: popup.y * GRID_SIZE,
+              animationDuration: `${SCORE_POPUP_DURATION_MS}ms`,
+            }}
+            onAnimationEnd={() => dismissScorePopup(popup.id)}
+          >
+            +{popup.points}
+            {popup.comboMultiplier > 1 ? ` x${popup.comboMultiplier}` : ''}
+          </div>
+        ))}
 
-          {state?.bumpMessage === 'gate' && kidsMode && (
-            <motion.div
-              key="gate-hint"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-yellow-100 border-2 border-yellow-500 rounded-xl text-sm font-bold text-blue-950 shadow-sm pointer-events-none"
-            >
-              {t('play.gate_hint')}
-            </motion.div>
-          )}
+        {state?.bumpMessage === 'gate' && kidsMode && (
+          <div className="play-gate-hint absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-yellow-100 border-2 border-yellow-500 rounded-xl text-sm font-bold text-blue-950 shadow-sm pointer-events-none">
+            {t('play.gate_hint')}
+          </div>
+        )}
 
-          {state?.isGameOver && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center backdrop-blur-[2px]"
+        {state?.isGameOver && (
+          <div className="play-overlay-fade-in absolute inset-0 bg-white/90 flex flex-col items-center justify-center backdrop-blur-[2px]">
+            <h3 className="text-4xl font-bold text-red-600 mb-2">{t('play.crashed')}</h3>
+            <p className="text-blue-900/60 mb-6">{t('play.destroyed')}</p>
+            <button
+              onClick={initGame}
+              className="sketch-button bg-blue-950 text-white font-bold"
             >
-              <h3 className="text-4xl font-bold text-red-600 mb-2">{t('play.crashed')}</h3>
-              <p className="text-blue-900/60 mb-6">{t('play.destroyed')}</p>
-              <button 
-                onClick={initGame}
-                className="sketch-button bg-blue-950 text-white font-bold"
-              >
-                {t('play.try_again')}
-              </button>
-            </motion.div>
-          )}
+              {t('play.try_again')}
+            </button>
+          </div>
+        )}
 
-          {state?.isLevelComplete && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center backdrop-blur-[2px]"
-            >
-              <Trophy size={64} className="text-yellow-600 mb-4" />
-              <h3 className="text-4xl font-bold text-blue-950 mb-2">{t('play.level_clear')}</h3>
-              <div className="flex gap-1 mb-3">
-                {[1, 2, 3].map((star) => (
-                  <Star
-                    key={star}
-                    size={28}
-                    className={star <= (state?.starsEarned ?? 0) ? 'text-yellow-500 fill-yellow-500' : 'text-blue-900/20'}
-                  />
-                ))}
-              </div>
-              <p className="text-blue-900/60 mb-2">{t('play.success')}</p>
-              <p className="text-sm font-mono text-blue-900/50 mb-6">
-                {t('play.final_score')}: {state?.score ?? 0}
-                {(state?.finishBonus ?? 0) > 0 ? ` (${t('play.finish_bonus')}: +${state?.finishBonus})` : ''}
-              </p>
-              <div className="flex gap-4">
-                {hasMoreLevels ? (
-                  <button 
-                    onClick={onNextLevel}
-                    className="sketch-button bg-blue-950 text-white font-bold"
-                  >
-                    {t('play.next_level')}
-                  </button>
-                ) : (
-                  <button 
-                    onClick={onExit}
-                    className="sketch-button bg-blue-950 text-white font-bold"
-                  >
-                    {t('play.main_menu')}
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {state?.isLevelComplete && (
+          <div className="play-overlay-fade-in absolute inset-0 bg-white/90 flex flex-col items-center justify-center backdrop-blur-[2px]">
+            <Trophy size={64} className="text-yellow-600 mb-4" />
+            <h3 className="text-4xl font-bold text-blue-950 mb-2">{t('play.level_clear')}</h3>
+            <div className="flex gap-1 mb-3">
+              {[1, 2, 3].map((star) => (
+                <Star
+                  key={star}
+                  size={28}
+                  className={star <= (state?.starsEarned ?? 0) ? 'text-yellow-500 fill-yellow-500' : 'text-blue-900/20'}
+                />
+              ))}
+            </div>
+            <p className="text-blue-900/60 mb-2">{t('play.success')}</p>
+            <p className="text-sm font-mono text-blue-900/50 mb-6">
+              {t('play.final_score')}: {state?.score ?? 0}
+              {(state?.finishBonus ?? 0) > 0 ? ` (${t('play.finish_bonus')}: +${state?.finishBonus})` : ''}
+            </p>
+            <div className="flex gap-4">
+              {hasMoreLevels ? (
+                <button
+                  onClick={onNextLevel}
+                  className="sketch-button bg-blue-950 text-white font-bold"
+                >
+                  {t('play.next_level')}
+                </button>
+              ) : (
+                <button
+                  onClick={onExit}
+                  className="sketch-button bg-blue-950 text-white font-bold"
+                >
+                  {t('play.main_menu')}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Mobile Controls */}
@@ -653,3 +622,5 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     </div>
   );
 };
+
+Play.displayName = 'Play';
