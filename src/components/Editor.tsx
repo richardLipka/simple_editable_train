@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameMap, CellType, Direction, CargoType, CargoConfig, EngineType, WallType, SystemAssets } from '../types';
+import { GameMap, CellType, Direction, CargoType, CargoConfig, BonusType, BonusConfig, EngineType, WallType, SystemAssets } from '../types';
 import { GRID_SIZE } from '../constants';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
 import { createGridBackground } from '../utils/canvasBackground';
@@ -9,7 +9,7 @@ import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { 
   Save, Trash2, Plus, ArrowLeft, Package, Square, LogOut, Play, 
   Settings, MousePointer2, Box, Circle, Triangle, Eraser, BrickWall,
-  Wand2, Eye, EyeOff, Settings2, Route, Layout
+  Wand2, Eye, EyeOff, Settings2, Route, Layout, Sparkles
 } from 'lucide-react';
 
 type ShapeTool = 'POINT' | 'RECT' | 'TRI' | 'CIRC';
@@ -18,6 +18,7 @@ type EditorTool = CellType | 'PATH';
 interface EditorProps {
   map: GameMap;
   cargoTypes: CargoType[];
+  bonusTypes: BonusType[];
   engines: EngineType[];
   walls: WallType[];
   systemAssets: SystemAssets;
@@ -25,12 +26,13 @@ interface EditorProps {
   onExit: () => void;
 }
 
-export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, engines, walls, systemAssets, onSave, onExit }) => {
+export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bonusTypes, engines, walls, systemAssets, onSave, onExit }) => {
   const { t } = useTranslation();
   const [map, setMap] = useState<GameMap>({ ...initialMap });
   const [selectedTool, setSelectedTool] = useState<EditorTool>('WALL');
   const [shapeTool, setShapeTool] = useState<ShapeTool>('POINT');
   const [selectedCargoId, setSelectedCargoId] = useState<string | 'RANDOM'>('RANDOM');
+  const [selectedBonusId, setSelectedBonusId] = useState<string>(bonusTypes[0]?.id || 'coin');
   const [selectedWallId, setSelectedWallId] = useState<string>(walls[0]?.id || 'brick');
   const [showPath, setShowPath] = useState(true);
   const [genStep, setGenStep] = useState<'PATH' | 'FILL'>('PATH');
@@ -55,6 +57,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
   const imageCache = getImageCache();
   const wallById = useMemo(() => createIdMap(walls), [walls]);
   const cargoById = useMemo(() => createIdMap(cargoTypes), [cargoTypes]);
+  const bonusById = useMemo(() => createIdMap(bonusTypes), [bonusTypes]);
   const selectedEngine = useMemo(
     () => engines.find((e) => e.id === map.selectedEngineId) || engines[0],
     [engines, map.selectedEngineId],
@@ -66,7 +69,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
 
   useEffect(() => {
     preloadImages(
-      collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, {
+      collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, bonusTypes, {
         includeCarriageImages: false,
       }),
     ).then(() => draw());
@@ -480,6 +483,22 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
             ctx.fillStyle = 'white';
             ctx.fillText(cargoEmoji, px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 12);
           }
+        } else if (cell === 'BONUS') {
+          const config = map.bonusConfigs?.[`${x},${y}`];
+          const bonus = config ? bonusById.get(config.bonusId) : bonusTypes[0];
+          const bonusImage = bonus?.image;
+          const bonusEmoji = bonus?.emoji ?? '⭐';
+
+          if (bonusImage && imageCache[bonusImage]?.complete) {
+            ctx.drawImage(imageCache[bonusImage], px + 4, py + 4, GRID_SIZE - 8, GRID_SIZE - 8);
+          } else {
+            ctx.fillStyle = '#fef3c7';
+            ctx.fillRect(px + 1, py + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+            ctx.font = '32px serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#92400e';
+            ctx.fillText(bonusEmoji, px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 12);
+          }
         }
       }
     }
@@ -542,7 +561,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
         }
       }
     }
-  }, [map, wallById, cargoById, selectedEngine, gridBackground, isDragging, dragStart, dragCurrent, shapeTool, showPath, systemAssets]);
+  }, [map, wallById, cargoById, bonusById, bonusTypes, selectedEngine, gridBackground, isDragging, dragStart, dragCurrent, shapeTool, showPath, systemAssets]);
 
   useEffect(() => {
     draw();
@@ -556,7 +575,14 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
     return { x, y };
   };
 
-  const applyTool = (x: number, y: number, grid: CellType[][], configs: { [key: string]: CargoConfig }, wallConfigs: Record<string, string>) => {
+  const applyTool = (
+    x: number,
+    y: number,
+    grid: CellType[][],
+    configs: { [key: string]: CargoConfig },
+    bonusConfigs: Record<string, BonusConfig>,
+    wallConfigs: Record<string, string>,
+  ) => {
     if (x < 0 || x >= map.width || y < 0 || y >= map.height) return;
 
     if (selectedTool === 'PATH') {
@@ -592,6 +618,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
     if (selectedTool === 'EMPTY') {
       grid[y][x] = 'EMPTY';
       delete configs[`${x},${y}`];
+      delete bonusConfigs[`${x},${y}`];
       delete wallConfigs[`${x},${y}`];
       return;
     }
@@ -602,10 +629,16 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
         type: selectedCargoId === 'RANDOM' ? 'RANDOM' : 'SPECIFIC',
         cargoId: selectedCargoId === 'RANDOM' ? undefined : selectedCargoId,
       };
+      delete bonusConfigs[`${x},${y}`];
+      delete wallConfigs[`${x},${y}`];
+    } else if (selectedTool === 'BONUS') {
+      bonusConfigs[`${x},${y}`] = { bonusId: selectedBonusId };
+      delete configs[`${x},${y}`];
       delete wallConfigs[`${x},${y}`];
     } else if (selectedTool === 'WALL') {
       wallConfigs[`${x},${y}`] = selectedWallId;
       delete configs[`${x},${y}`];
+      delete bonusConfigs[`${x},${y}`];
     } else if (selectedTool === 'GATE') {
       for (let r = 0; r < map.height; r++) {
         for (let c = 0; c < map.width; c++) {
@@ -614,6 +647,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
       }
       grid[y][x] = 'GATE';
       delete configs[`${x},${y}`];
+      delete bonusConfigs[`${x},${y}`];
       delete wallConfigs[`${x},${y}`];
     } else if (selectedTool === 'START') {
       for (let r = 0; r < map.height; r++) {
@@ -624,9 +658,11 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
       grid[y][x] = 'START';
       setMap(prev => ({ ...prev, startPos: { x, y } }));
       delete configs[`${x},${y}`];
+      delete bonusConfigs[`${x},${y}`];
       delete wallConfigs[`${x},${y}`];
     } else {
       delete configs[`${x},${y}`];
+      delete bonusConfigs[`${x},${y}`];
       delete wallConfigs[`${x},${y}`];
     }
   };
@@ -720,8 +756,9 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
       if (!isDoubleClick && shapeTool === 'POINT') {
         const newGrid = [...map.grid.map(row => [...row])];
         const newConfigs = { ...map.cargoConfigs };
+        const newBonusConfigs = { ...(map.bonusConfigs ?? {}) };
         const newWallConfigs = { ...map.wallConfigs };
-        applyTool(pos.x, pos.y, newGrid, newConfigs, newWallConfigs);
+        applyTool(pos.x, pos.y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
       }
 
       setIsDragging(true);
@@ -737,10 +774,11 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
     if (shapeTool === 'POINT') {
       const newGrid = [...map.grid.map(row => [...row])];
       const newConfigs = { ...map.cargoConfigs };
+      const newBonusConfigs = { ...(map.bonusConfigs ?? {}) };
       const newWallConfigs = { ...map.wallConfigs };
-      applyTool(pos.x, pos.y, newGrid, newConfigs, newWallConfigs);
+      applyTool(pos.x, pos.y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
       if (selectedTool !== 'PATH') {
-        setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, wallConfigs: newWallConfigs }));
+        setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, bonusConfigs: newBonusConfigs, wallConfigs: newWallConfigs }));
       }
     }
   };
@@ -773,13 +811,14 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
         return;
       }
 
-      if (shapeTool === 'POINT' && (selectedTool === 'WALL' || selectedTool === 'EMPTY' || selectedTool === 'CARGO' || selectedTool === 'PATH')) {
+      if (shapeTool === 'POINT' && (selectedTool === 'WALL' || selectedTool === 'EMPTY' || selectedTool === 'CARGO' || selectedTool === 'BONUS' || selectedTool === 'PATH')) {
         const newGrid = [...map.grid.map(row => [...row])];
         const newConfigs = { ...map.cargoConfigs };
+        const newBonusConfigs = { ...(map.bonusConfigs ?? {}) };
         const newWallConfigs = { ...map.wallConfigs };
-        applyTool(pos.x, pos.y, newGrid, newConfigs, newWallConfigs);
+        applyTool(pos.x, pos.y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
         if (selectedTool !== 'PATH') {
-          setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, wallConfigs: newWallConfigs }));
+          setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, bonusConfigs: newBonusConfigs, wallConfigs: newWallConfigs }));
         }
       }
     }
@@ -797,6 +836,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
     if (shapeTool !== 'POINT') {
       const newGrid = [...map.grid.map(row => [...row])];
       const newConfigs = { ...map.cargoConfigs };
+      const newBonusConfigs = { ...(map.bonusConfigs ?? {}) };
       const newWallConfigs = { ...map.wallConfigs };
 
       const x1 = Math.min(dragStart.x, dragCurrent.x);
@@ -808,7 +848,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
         for (let y = y1; y <= y2; y++) {
           for (let x = x1; x <= x2; x++) {
             if (x === x1 || x === x2 || y === y1 || y === y2) {
-              applyTool(x, y, newGrid, newConfigs, newWallConfigs);
+              applyTool(x, y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
             }
           }
         }
@@ -823,7 +863,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
             const dy = (y - centerY) / (radiusY || 1);
             const dist = dx * dx + dy * dy;
             if (dist <= 1.2 && dist >= 0.6) {
-              applyTool(x, y, newGrid, newConfigs, newWallConfigs);
+              applyTool(x, y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
             }
           }
         }
@@ -838,13 +878,13 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
             const isLeftEdge = x === Math.floor(startX);
             const isRightEdge = x === Math.ceil(endX);
             if ((isBase || isLeftEdge || isRightEdge) && x >= Math.floor(startX) && x <= Math.ceil(endX)) {
-              applyTool(x, y, newGrid, newConfigs, newWallConfigs);
+              applyTool(x, y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
             }
           }
         }
       }
 
-      setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, wallConfigs: newWallConfigs }));
+      setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, bonusConfigs: newBonusConfigs, wallConfigs: newWallConfigs }));
     }
 
     setIsDragging(false);
@@ -1017,6 +1057,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
               { id: 'EMPTY', icon: <Eraser size={18} />, label: t('editor.eraser') },
               { id: 'GATE', icon: <LogOut size={18} />, label: t('editor.gate') },
               { id: 'CARGO', icon: <Package size={18} />, label: t('editor.cargo') },
+              { id: 'BONUS', icon: <Sparkles size={18} />, label: t('editor.bonus') },
               { id: 'START', icon: <Play size={18} />, label: t('editor.start') },
               { id: 'PATH', icon: <Route size={18} />, label: t('editor.path') },
             ].map(tool => (
@@ -1066,6 +1107,33 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
                     )}
                   </div>
                   <span>{w.name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {selectedTool === 'BONUS' && (
+          <section className="flex-1 min-h-0 flex flex-col animate-in fade-in slide-in-from-top-2 duration-300">
+            <label className="text-xs font-mono text-blue-900/40 uppercase tracking-widest mb-2 block">{t('editor.bonus_type')}</label>
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-2">
+              {bonusTypes.map((bonus) => (
+                <button
+                  key={bonus.id}
+                  onClick={() => setSelectedBonusId(bonus.id)}
+                  className={`p-2 rounded-lg border text-left text-sm flex items-center gap-2 ${
+                    selectedBonusId === bonus.id ? 'bg-blue-950 text-white border-blue-950' : 'bg-white border-blue-950/20'
+                  }`}
+                >
+                  <div className="w-6 h-6 flex items-center justify-center overflow-hidden rounded">
+                    {bonus.image ? (
+                      <img src={bonus.image} alt={bonus.name} className="w-full h-full object-contain" />
+                    ) : (
+                      <span>{bonus.emoji}</span>
+                    )}
+                  </div>
+                  <span>{bonus.name}</span>
+                  <span className="ml-auto text-xs opacity-70">+{bonus.pointValue ?? 50}</span>
                 </button>
               ))}
             </div>
@@ -1123,6 +1191,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, eng
                     ...prev,
                     grid: Array(prev.height).fill(null).map(() => Array(prev.width).fill('EMPTY')),
                     cargoConfigs: {},
+                    bonusConfigs: {},
                     wallConfigs: {},
                     generatedPath: [],
                     pathAnchors: []

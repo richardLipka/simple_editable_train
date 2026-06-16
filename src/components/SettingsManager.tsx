@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { EngineType, WallType, CargoType, AppConfig, SystemAssets } from '../types';
-import { DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_CARGO_TYPES, EMOJI_LIST, DEFAULT_SYSTEM_ASSETS } from '../constants';
+import { EngineType, WallType, CargoType, BonusType, BonusKind, AppConfig, SystemAssets } from '../types';
+import { DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES, EMOJI_LIST, DEFAULT_SYSTEM_ASSETS } from '../constants';
 import { fetchPresetsManifest, fetchPresetConfig, isValidAppConfig, PresetEntry } from '../services/configService';
-import { Trash2, Plus, Image as ImageIcon, X, Save, Smile, TrainFront, BrickWall, Package, Download, Upload, Pencil, ArrowLeftRight, LayoutGrid, FolderOpen, Loader2 } from 'lucide-react';
+import { Trash2, Plus, Image as ImageIcon, X, Save, Smile, TrainFront, BrickWall, Package, Download, Upload, Pencil, ArrowLeftRight, LayoutGrid, FolderOpen, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CargoImageEditor } from './CargoImageEditor';
 import { SketchPad } from './SketchPad';
@@ -12,13 +12,15 @@ interface SettingsManagerProps {
   engines: EngineType[];
   walls: WallType[];
   cargoTypes: CargoType[];
+  bonusTypes: BonusType[];
   systemAssets: SystemAssets;
   onSaveEngines: (engines: EngineType[]) => void;
   onSaveWalls: (walls: WallType[]) => void;
   onSaveCargo: (cargo: CargoType[]) => void;
+  onSaveBonus: (bonus: BonusType[]) => void;
   onSaveSystemAssets: (system: SystemAssets) => void;
   onExit: () => void;
-  initialTab?: 'ENGINES' | 'WALLS' | 'CARGO' | 'SYSTEM';
+  initialTab?: 'ENGINES' | 'WALLS' | 'CARGO' | 'BONUSES' | 'SYSTEM';
   selectedEngineId?: string;
   onSelectEngine?: (id: string) => void;
   onExportConfig: () => void;
@@ -29,10 +31,12 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   engines, 
   walls, 
   cargoTypes,
+  bonusTypes,
   systemAssets,
   onSaveEngines, 
   onSaveWalls, 
   onSaveCargo,
+  onSaveBonus,
   onSaveSystemAssets,
   onExit,
   initialTab = 'ENGINES',
@@ -42,15 +46,15 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   onImportConfig
 }) => {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'ENGINES' | 'WALLS' | 'CARGO' | 'SYSTEM'>(initialTab);
+  const [tab, setTab] = useState<'ENGINES' | 'WALLS' | 'CARGO' | 'BONUSES' | 'SYSTEM'>(initialTab);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingImage, setEditingImage] = useState<{
-    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
+    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
     src: string;
   } | null>(null);
   const [sketching, setSketching] = useState<{
-    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
+    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
     initial?: string;
   } | null>(null);
   const [pickingEmoji, setPickingEmoji] = useState<'emoji' | 'cargoEmoji' | 'carriageEmoji' | 'startEmoji' | 'gateOpenEmoji' | 'gateClosedEmoji' | 'randomCargoEmoji' | null>(null);
@@ -81,9 +85,18 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     cargoEmoji: '🎁',
     carriageEmoji: '🚃',
     color: '#10b981',
+    pointValue: 100,
   });
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo') => {
+  const [newBonus, setNewBonus] = useState<Partial<BonusType>>({
+    id: '',
+    name: '',
+    emoji: '🪙',
+    kind: 'coin',
+    pointValue: 50,
+  });
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -106,6 +119,8 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
         setNewCargo(prev => ({ ...prev, cargoImage: croppedImage }));
       } else if (editingImage.type === 'carriage') {
         setNewCargo(prev => ({ ...prev, carriageImage: croppedImage }));
+      } else if (editingImage.type === 'bonus') {
+        setNewBonus(prev => ({ ...prev, image: croppedImage }));
       } else if (editingImage.type === 'start') {
         setCurrentSystemAssets(prev => ({ ...prev, startImage: croppedImage }));
       } else if (editingImage.type === 'gateOpen') {
@@ -154,8 +169,31 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
       }
       setIsAdding(false);
       setEditingId(null);
-      setNewCargo({ id: '', name: '', cargoEmoji: '🎁', carriageEmoji: '🚃', color: '#10b981' });
+      setNewCargo({ id: '', name: '', cargoEmoji: '🎁', carriageEmoji: '🚃', color: '#10b981', pointValue: 100 });
     }
+  };
+
+  const handleAddBonus = () => {
+    if (newBonus.id && newBonus.name) {
+      if (editingId) {
+        onSaveBonus(bonusTypes.map((b) => (b.id === editingId ? (newBonus as BonusType) : b)));
+      } else {
+        onSaveBonus([...bonusTypes, newBonus as BonusType]);
+      }
+      setIsAdding(false);
+      setEditingId(null);
+      setNewBonus({ id: '', name: '', emoji: '🪙', kind: 'coin', pointValue: 50 });
+    }
+  };
+
+  const handleDeleteBonus = (id: string) => {
+    onSaveBonus(bonusTypes.filter((b) => b.id !== id));
+  };
+
+  const handleEditBonus = (bonus: BonusType) => {
+    setNewBonus(bonus);
+    setEditingId(bonus.id);
+    setIsAdding(true);
   };
 
   const handleDeleteEngine = (id: string) => {
@@ -281,6 +319,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
             if (sketching.type === 'wall') setNewWall(prev => ({ ...prev, image: base64 }));
             if (sketching.type === 'cargo') setNewCargo(prev => ({ ...prev, cargoImage: base64 }));
             if (sketching.type === 'carriage') setNewCargo(prev => ({ ...prev, carriageImage: base64 }));
+            if (sketching.type === 'bonus') setNewBonus(prev => ({ ...prev, image: base64 }));
             if (sketching.type === 'start') setCurrentSystemAssets(prev => ({ ...prev, startImage: base64 }));
             if (sketching.type === 'gateOpen') setCurrentSystemAssets(prev => ({ ...prev, gateOpenImage: base64 }));
             if (sketching.type === 'gateClosed') setCurrentSystemAssets(prev => ({ ...prev, gateClosedImage: base64 }));
@@ -363,7 +402,8 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   setEditingId(null);
                   if (tab === 'ENGINES') setNewEngine({ id: '', name: '', emoji: '🚂' });
                   else if (tab === 'WALLS') setNewWall({ id: '', name: '', emoji: '🧱' });
-                  else setNewCargo({ id: '', name: '', cargoEmoji: '🎁', carriageEmoji: '🚃', color: '#10b981' });
+                  else if (tab === 'BONUSES') setNewBonus({ id: '', name: '', emoji: '🪙', kind: 'coin', pointValue: 50 });
+                  else setNewCargo({ id: '', name: '', cargoEmoji: '🎁', carriageEmoji: '🚃', color: '#10b981', pointValue: 100 });
                 }
               }}
               className="sketch-button bg-blue-950 text-white font-bold flex items-center gap-2"
@@ -376,7 +416,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               ) : (
                 <>
                   <Plus size={18} />
-                  {t('settings.add')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')}
+                  {t('settings.add')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : tab === 'BONUSES' ? t('settings.bonuses') : t('settings.cargo')}
                 </>
               )}
             </button>
@@ -412,6 +452,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
           {t('settings.cargo')}
         </button>
         <button 
+          onClick={() => { setTab('BONUSES'); setIsAdding(false); setEditingId(null); }}
+          className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${tab === 'BONUSES' ? 'bg-blue-950 text-white' : 'bg-white text-blue-900/40 hover:text-blue-950 border border-blue-950/20'}`}
+        >
+          <Sparkles size={18} />
+          {t('settings.bonuses')}
+        </button>
+        <button 
           onClick={() => { setTab('SYSTEM'); setIsAdding(false); setEditingId(null); }}
           className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${tab === 'SYSTEM' ? 'bg-blue-950 text-white' : 'bg-white text-blue-900/40 hover:text-blue-950 border border-blue-950/20'}`}
         >
@@ -432,7 +479,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                 <div className="space-y-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     {editingId ? <ImageIcon className="text-blue-950" /> : <Plus className="text-blue-950" />}
-                    {editingId ? t('settings.edit') : t('settings.new')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')} {t('settings.definition')}
+                    {editingId ? t('settings.edit') : t('settings.new')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : tab === 'BONUSES' ? t('settings.bonuses') : t('settings.cargo')} {t('settings.definition')}
                   </h3>
                   
                   <div className="space-y-4">
@@ -442,10 +489,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                         type="text" 
                         placeholder="e.g. futuristic-engine"
                         disabled={!!editingId}
-                        value={tab === 'ENGINES' ? newEngine.id : tab === 'WALLS' ? newWall.id : newCargo.id}
+                        value={tab === 'ENGINES' ? newEngine.id : tab === 'WALLS' ? newWall.id : tab === 'BONUSES' ? newBonus.id : newCargo.id}
                         onChange={e => {
                           if (tab === 'ENGINES') setNewEngine({...newEngine, id: e.target.value});
                           else if (tab === 'WALLS') setNewWall({...newWall, id: e.target.value});
+                          else if (tab === 'BONUSES') setNewBonus({...newBonus, id: e.target.value});
                           else setNewCargo({...newCargo, id: e.target.value});
                         }}
                         className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -456,10 +504,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                       <input 
                         type="text" 
                         placeholder="e.g. Neo-Steam 2099"
-                        value={tab === 'ENGINES' ? newEngine.name : tab === 'WALLS' ? newWall.name : newCargo.name}
+                        value={tab === 'ENGINES' ? newEngine.name : tab === 'WALLS' ? newWall.name : tab === 'BONUSES' ? newBonus.name : newCargo.name}
                         onChange={e => {
                           if (tab === 'ENGINES') setNewEngine({...newEngine, name: e.target.value});
                           else if (tab === 'WALLS') setNewWall({...newWall, name: e.target.value});
+                          else if (tab === 'BONUSES') setNewBonus({...newBonus, name: e.target.value});
                           else setNewCargo({...newCargo, name: e.target.value});
                         }}
                         className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors"
@@ -505,6 +554,54 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                             className="w-full h-[54px] bg-white border border-blue-950/20 rounded-xl p-1 cursor-pointer"
                           />
                         </div>
+                        <div>
+                          <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.point_value')}</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={newCargo.pointValue ?? 100}
+                            onChange={(e) => setNewCargo({ ...newCargo, pointValue: Number(e.target.value) })}
+                            className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors"
+                          />
+                        </div>
+                      </>
+                    ) : tab === 'BONUSES' ? (
+                      <>
+                        <div>
+                          <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.fallback_emoji')}</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={newBonus.emoji}
+                              readOnly
+                              onClick={() => setPickingEmoji('emoji')}
+                              className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 text-center text-2xl cursor-pointer hover:border-blue-950 transition-colors"
+                            />
+                            <Smile className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900/40 pointer-events-none" size={18} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.bonus_kind')}</label>
+                          <select
+                            value={newBonus.kind}
+                            onChange={(e) => setNewBonus({ ...newBonus, kind: e.target.value as BonusKind })}
+                            className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors"
+                          >
+                            <option value="coin">{t('settings.kind_coin')}</option>
+                            <option value="star">{t('settings.kind_star')}</option>
+                            <option value="gem">{t('settings.kind_gem')}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.point_value')}</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={newBonus.pointValue ?? 50}
+                            onChange={(e) => setNewBonus({ ...newBonus, pointValue: Number(e.target.value) })}
+                            className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors"
+                          />
+                        </div>
                       </>
                     ) : (
                       <div>
@@ -512,7 +609,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                         <div className="relative">
                           <input 
                             type="text" 
-                            value={tab === 'ENGINES' ? newEngine.emoji : newWall.emoji}
+                            value={tab === 'ENGINES' ? newEngine.emoji : tab === 'BONUSES' ? newBonus.emoji : newWall.emoji}
                             readOnly
                             onClick={() => setPickingEmoji('emoji')}
                             className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 text-center text-2xl cursor-pointer hover:border-blue-950 transition-colors"
@@ -620,6 +717,46 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                       </div>
                     </div>
                     </div>
+                  ) : tab === 'BONUSES' ? (
+                    <div className="space-y-4">
+                      <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.custom_asset')}</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
+                            <ImageIcon size={14} />
+                            {t('settings.upload')}
+                          </button>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e, 'bonus')}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          onClick={() => setSketching({ type: 'bonus', initial: newBonus.image })}
+                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
+                        >
+                          <Pencil size={14} />
+                          {t('settings.draw')}
+                        </button>
+                      </div>
+                      <div className="aspect-square max-w-[200px] bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+                        {newBonus.image ? (
+                          <img src={newBonus.image} alt="Bonus" className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="text-center p-4 text-4xl">{newBonus.emoji}</div>
+                        )}
+                        {newBonus.image && (
+                          <button
+                            onClick={() => setNewBonus({ ...newBonus, image: undefined })}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <div className="space-y-4">
                       <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.custom_asset')}</label>
@@ -673,16 +810,17 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                       {t('settings.cancel')}
                     </button>
                     <button 
-                      onClick={tab === 'ENGINES' ? handleAddEngine : tab === 'WALLS' ? handleAddWall : handleAddCargo}
+                      onClick={tab === 'ENGINES' ? handleAddEngine : tab === 'WALLS' ? handleAddWall : tab === 'BONUSES' ? handleAddBonus : handleAddCargo}
                       disabled={
                         tab === 'ENGINES' ? (!newEngine.id || !newEngine.name) : 
                         tab === 'WALLS' ? (!newWall.id || !newWall.name) : 
+                        tab === 'BONUSES' ? (!newBonus.id || !newBonus.name) :
                         (!newCargo.id || !newCargo.name)
                       }
                       className="flex-1 py-4 sketch-button bg-blue-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center justify-center gap-2"
                     >
                       <Save size={20} />
-                      {editingId ? t('settings.update') : t('settings.save')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')}
+                      {editingId ? t('settings.update') : t('settings.save')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : tab === 'BONUSES' ? t('settings.bonuses') : t('settings.cargo')}
                     </button>
                   </div>
                 </div>
@@ -785,6 +923,44 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                 </div>
               </div>
             </motion.div>
+          )) : tab === 'BONUSES' ? bonusTypes.map((b, idx) => (
+            <motion.div
+              layout
+              key={b.id}
+              className="group relative sketch-card bg-white border border-blue-950/20 p-6 transition-all"
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-yellow-50 flex items-center justify-center text-3xl relative overflow-hidden">
+                    {b.image ? (
+                      <img src={b.image} alt={b.name} className="w-full h-full object-contain p-2" />
+                    ) : (
+                      b.emoji
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg">{b.name}</h4>
+                    <p className="text-xs font-mono text-blue-900/40 uppercase tracking-tighter">{b.id} · +{b.pointValue ?? 50}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEditBonus(b)}
+                    className="p-2 text-blue-900/40 hover:text-blue-950 transition-colors"
+                  >
+                    <ImageIcon size={18} />
+                  </button>
+                  {idx >= DEFAULT_BONUS_TYPES.length && (
+                    <button
+                      onClick={() => handleDeleteBonus(b.id)}
+                      className="p-2 text-blue-900/40 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           )) : cargoTypes.map((c, idx) => (
             <motion.div 
               layout
@@ -802,7 +978,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   </div>
                   <div>
                     <h4 className="font-bold text-lg">{c.name}</h4>
-                    <p className="text-xs font-mono text-blue-900/40 uppercase tracking-tighter">{c.id}</p>
+                    <p className="text-xs font-mono text-blue-900/40 uppercase tracking-tighter">{c.id} · +{c.pointValue ?? 100}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1055,6 +1231,8 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                               setNewEngine(prev => ({ ...prev, emoji }));
                             } else if (tab === 'WALLS') {
                               setNewWall(prev => ({ ...prev, emoji }));
+                            } else if (tab === 'BONUSES') {
+                              setNewBonus(prev => ({ ...prev, emoji }));
                             } else if (tab === 'SYSTEM') {
                               if (pickingEmoji === 'startEmoji') setCurrentSystemAssets(prev => ({ ...prev, startEmoji: emoji }));
                               else if (pickingEmoji === 'gateOpenEmoji') setCurrentSystemAssets(prev => ({ ...prev, gateOpenEmoji: emoji }));

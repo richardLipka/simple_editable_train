@@ -1,4 +1,5 @@
 import { AppConfig } from '../types';
+import { normalizeAppConfig } from '../utils/configDefaults';
 
 export interface PresetEntry {
   id: string;
@@ -49,5 +50,5 @@ export async function fetchPresetConfig(file: string): Promise<AppConfig> {
   if (!isValidAppConfig(data)) {
     throw new Error('Invalid preset configuration format');
   }
-  return data;
+  return normalizeAppConfig(data as AppConfig);
 }

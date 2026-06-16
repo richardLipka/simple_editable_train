@@ -1,7 +1,9 @@
 
 export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
-export type CellType = 'EMPTY' | 'WALL' | 'GATE' | 'CARGO' | 'START';
+export type CellType = 'EMPTY' | 'WALL' | 'GATE' | 'CARGO' | 'BONUS' | 'START';
+
+export type BonusKind = 'coin' | 'star' | 'gem';
 
 export interface EngineType {
   id: string;
@@ -23,13 +25,27 @@ export interface CargoType {
   cargoEmoji: string;
   carriageEmoji: string;
   color: string;
-  cargoImage?: string; // Base64 or URL
-  carriageImage?: string; // Base64 or URL
+  cargoImage?: string;
+  carriageImage?: string;
+  pointValue?: number;
+}
+
+export interface BonusType {
+  id: string;
+  name: string;
+  emoji: string;
+  image?: string;
+  pointValue?: number;
+  kind: BonusKind;
 }
 
 export interface CargoConfig {
   type: 'SPECIFIC' | 'RANDOM';
   cargoId?: string;
+}
+
+export interface BonusConfig {
+  bonusId: string;
 }
 
 export interface GameMap {
@@ -38,8 +54,9 @@ export interface GameMap {
   width: number;
   height: number;
   grid: CellType[][];
-  cargoConfigs: Record<string, CargoConfig>; // key is "x,y"
-  wallConfigs: Record<string, string>; // key is "x,y", value is wallId
+  cargoConfigs: Record<string, CargoConfig>;
+  bonusConfigs?: Record<string, BonusConfig>;
+  wallConfigs: Record<string, string>;
   startPos: { x: number; y: number };
   startDir: Direction;
   selectedEngineId: string;
@@ -64,7 +81,20 @@ export interface AppConfig {
   engines: EngineType[];
   walls: WallType[];
   cargoTypes: CargoType[];
+  bonusTypes?: BonusType[];
   systemAssets: SystemAssets;
+}
+
+export interface PickupFeedback {
+  points: number;
+  label: string;
+  x: number;
+  y: number;
+  comboMultiplier: number;
+}
+
+export interface ScorePopup extends PickupFeedback {
+  id: number;
 }
 
 export interface GameState {
@@ -77,9 +107,19 @@ export interface GameState {
   moveProgress: number;
   direction: Direction;
   nextDirection: Direction;
-  carriages: string[]; // Array of cargoIds
+  carriages: string[];
   collectedCount: number;
   totalCargoCount: number;
-  collectedCargoKeys: string[]; // Array of "x,y" strings
+  collectedCargoKeys: string[];
+  collectedBonusCount: number;
+  totalBonusCount: number;
+  collectedBonusKeys: string[];
+  stepCount: number;
+  bumpCount: number;
+  comboStreak: number;
+  lastPickupAtMs: number;
+  starsEarned: number;
+  finishBonus: number;
   bumpMessage?: 'gate';
+  lastPickup?: PickupFeedback;
 }

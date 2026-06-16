@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameMap, GameState, Direction, CargoType, CargoConfig, EngineType, WallType, SystemAssets } from '../types';
+import { GameMap, GameState, Direction, CargoType, CargoConfig, BonusConfig, BonusType, EngineType, WallType, SystemAssets, ScorePopup } from '../types';
 import { GRID_SIZE, TICK_RATE } from '../constants';
-import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Download, Gauge, Eye, EyeOff } from 'lucide-react';
+import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Download, Gauge, Eye, EyeOff, Star } from 'lucide-react';
 import { generateOpenSCAD } from '../services/openscadService';
-import { getSegmentOrigin, moveTrain } from '../game/trainMovement';
+import { createInitialGameState, getSegmentOrigin, moveTrain } from '../game/trainMovement';
 import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
 import { createGridBackground } from '../utils/canvasBackground';
@@ -13,6 +13,33 @@ import { applyDirectionInput } from '../utils/directionInput';
 import { motion, AnimatePresence } from 'motion/react';
 
 const MAX_FRAME_DELTA_MS = 50;
+const SCORE_POPUP_DURATION_MS = 1000;
+const SCORE_POPUP_RISE_PX = 56;
+
+const ScorePopupFloater = React.memo(function ScorePopupFloater({
+  popup,
+  onComplete,
+}: {
+  popup: ScorePopup;
+  onComplete: (id: number) => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 1, y: 0 }}
+      animate={{ opacity: 0, y: -SCORE_POPUP_RISE_PX }}
+      transition={{ duration: SCORE_POPUP_DURATION_MS / 1000, ease: 'linear' }}
+      onAnimationComplete={() => onComplete(popup.id)}
+      className="absolute pointer-events-none font-black text-yellow-600 text-lg drop-shadow-sm -translate-x-1/2"
+      style={{
+        left: popup.x * GRID_SIZE + GRID_SIZE / 2,
+        top: popup.y * GRID_SIZE,
+      }}
+    >
+      +{popup.points}
+      {popup.comboMultiplier > 1 ? ` x${popup.comboMultiplier}` : ''}
+    </motion.div>
+  );
+});
 
 function needsHudUpdate(prev: GameState, next: GameState): boolean {
   return (
@@ -21,27 +48,36 @@ function needsHudUpdate(prev: GameState, next: GameState): boolean {
     prev.isGameOver !== next.isGameOver ||
     prev.isLevelComplete !== next.isLevelComplete ||
     prev.train.length !== next.train.length ||
-    prev.bumpMessage !== next.bumpMessage
+    prev.bumpMessage !== next.bumpMessage ||
+    prev.collectedBonusCount !== next.collectedBonusCount ||
+    prev.finishBonus !== next.finishBonus ||
+    prev.starsEarned !== next.starsEarned ||
+    prev.lastPickup !== next.lastPickup
   );
 }
 
 interface PlayProps {
   map: GameMap;
   cargoTypes: CargoType[];
+  bonusTypes: BonusType[];
   engines: EngineType[];
   walls: WallType[];
   systemAssets: SystemAssets;
   kidsMode: boolean;
+  levelIndex: number;
   onExit: () => void;
   onNextLevel: () => void;
   hasMoreLevels: boolean;
 }
 
-export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, systemAssets, kidsMode, onExit, onNextLevel, hasMoreLevels }) => {
+export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines, walls, systemAssets, kidsMode, levelIndex, onExit, onNextLevel, hasMoreLevels }) => {
   const { t } = useTranslation();
   const [state, setState] = useState<GameState | null>(null);
   const [showPath, setShowPath] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [scorePopups, setScorePopups] = useState<ScorePopup[]>([]);
+  const popupIdRef = useRef(0);
+  const lastProcessedPickupAtRef = useRef(0);
 
   const [tickRate, setTickRate] = useState(TICK_RATE);
   const tickRateRef = useRef(TICK_RATE);
@@ -52,11 +88,34 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
   const showPathRef = useRef(false);
   const resetTimingRef = useRef(true);
   const kidsModeRef = useRef(kidsMode);
+  const levelIndexRef = useRef(levelIndex);
   const imageCache = getImageCache();
 
   useEffect(() => {
     kidsModeRef.current = kidsMode;
   }, [kidsMode]);
+
+  useEffect(() => {
+    levelIndexRef.current = levelIndex;
+  }, [levelIndex]);
+
+  useEffect(() => {
+    const pickupAt = state?.lastPickupAtMs ?? 0;
+    if (pickupAt === 0 || pickupAt === lastProcessedPickupAtRef.current) return;
+
+    const pickup = state?.lastPickup;
+    if (!pickup) return;
+
+    lastProcessedPickupAtRef.current = pickupAt;
+    setScorePopups((prev) => [
+      ...prev,
+      { ...pickup, id: ++popupIdRef.current },
+    ]);
+  }, [state?.lastPickupAtMs]);
+
+  const dismissScorePopup = useCallback((popupId: number) => {
+    setScorePopups((prev) => prev.filter((popup) => popup.id !== popupId));
+  }, []);
 
   useEffect(() => {
     isPausedRef.current = isPaused;
@@ -70,7 +129,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
     let cancelled = false;
     assetsReadyRef.current = false;
 
-    preloadImages(collectGameAssetUrls(cargoTypes, engines, walls, systemAssets)).then(() => {
+    preloadImages(collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, bonusTypes)).then(() => {
       if (!cancelled) {
         assetsReadyRef.current = true;
       }
@@ -79,7 +138,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
     return () => {
       cancelled = true;
     };
-  }, [cargoTypes, engines, walls, systemAssets]);
+  }, [cargoTypes, bonusTypes, engines, walls, systemAssets]);
 
   // Keep ref in sync with state for the animation loop
   useEffect(() => {
@@ -87,28 +146,11 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
   }, [tickRate]);
 
   const initGame = useCallback(() => {
-    let totalCargo = 0;
-    map.grid.forEach(row => row.forEach(cell => {
-      if (cell === 'CARGO') totalCargo++;
-    }));
-
-    const newState: GameState = {
-      currentLevelIndex: 0,
-      score: 0,
-      isGameOver: false,
-      isLevelComplete: false,
-      train: [{ ...map.startPos }],
-      lastTrain: [{ ...map.startPos }],
-      moveProgress: 0,
-      direction: map.startDir,
-      nextDirection: map.startDir,
-      carriages: [],
-      collectedCount: 0,
-      totalCargoCount: totalCargo,
-      collectedCargoKeys: [],
-    };
+    const newState = createInitialGameState(map, map.startDir);
     stateRef.current = newState;
     setState(newState);
+    setScorePopups([]);
+    lastProcessedPickupAtRef.current = 0;
     setIsPaused(false);
     isPausedRef.current = false;
     resetTimingRef.current = true;
@@ -163,6 +205,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
 
     const wallById = createIdMap<WallType>(walls);
     const cargoById = createIdMap<CargoType>(cargoTypes);
+    const bonusById = createIdMap<BonusType>(bonusTypes);
     const selectedEngine: EngineType | undefined =
       engines.find((e) => e.id === map.selectedEngineId) || engines[0];
     const gridBackground = createGridBackground(canvas.width, canvas.height, map.width, map.height);
@@ -307,6 +350,27 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
         }
       }
 
+      const collectedBonus = new Set(gameState.collectedBonusKeys);
+      for (const [key, config] of Object.entries(map.bonusConfigs ?? {})) {
+        if (collectedBonus.has(key)) continue;
+
+        const comma = key.indexOf(',');
+        const x = Number(key.slice(0, comma));
+        const y = Number(key.slice(comma + 1));
+        const px = x * GRID_SIZE;
+        const py = y * GRID_SIZE;
+        const bonusConfig = config as BonusConfig;
+        const bonus = bonusById.get(bonusConfig.bonusId);
+
+        if (bonus?.image && imageCache[bonus.image]?.complete) {
+          ctx.drawImage(imageCache[bonus.image], px, py, GRID_SIZE, GRID_SIZE);
+        } else {
+          ctx.font = '36px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(bonus?.emoji ?? '⭐', px + GRID_SIZE / 2, py + GRID_SIZE / 2 + 12);
+        }
+      }
+
       const renderProgress = Math.min(gameState.moveProgress, 1);
       for (let i = gameState.train.length - 1; i >= 0; i--) {
         const p = gameState.train[i];
@@ -388,7 +452,14 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
         let next = current;
 
         while (newProgress >= 1 && !next.isGameOver && !next.isLevelComplete) {
-          next = moveTrain(next, map, cargoTypes, { softBump: kidsModeRef.current });
+          next = moveTrain(next, map, cargoTypes, {
+            softBump: kidsModeRef.current,
+            cargoTypes,
+            bonusTypes,
+            levelIndex: levelIndexRef.current,
+            kidsMode: kidsModeRef.current,
+            nowMs: performance.now(),
+          });
           newProgress -= 1;
         }
 
@@ -406,16 +477,17 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
 
     frameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frameId);
-  }, [map, cargoTypes, engines, walls, systemAssets]);
+  }, [map, cargoTypes, bonusTypes, engines, walls, systemAssets]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-[#fdfaf6] text-blue-950 p-4">
       <div className="mb-4 flex items-center justify-between w-full max-w-2xl">
         <div className="flex flex-col">
           <h2 className="text-2xl font-bold tracking-tight">{map.name}</h2>
-          <div className="flex gap-4 text-sm text-blue-900/60 font-mono">
-            <span>{t('play.score')}: {state?.score.toString().padStart(6, '0')}</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-blue-900/60 font-mono">
+            <span>{t('play.score')}: {state?.score ?? 0}</span>
             <span>{t('play.cargo')}: {state?.collectedCount}/{state?.totalCargoCount}</span>
+            <span>{t('play.bonus')}: {state?.collectedBonusCount}/{state?.totalBonusCount}</span>
           </div>
         </div>
         
@@ -488,6 +560,10 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
         />
 
         <AnimatePresence>
+          {scorePopups.map((popup) => (
+            <ScorePopupFloater key={popup.id} popup={popup} onComplete={dismissScorePopup} />
+          ))}
+
           {state?.bumpMessage === 'gate' && kidsMode && (
             <motion.div
               key="gate-hint"
@@ -525,7 +601,20 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
             >
               <Trophy size={64} className="text-yellow-600 mb-4" />
               <h3 className="text-4xl font-bold text-blue-950 mb-2">{t('play.level_clear')}</h3>
-              <p className="text-blue-900/60 mb-6">{t('play.success')}</p>
+              <div className="flex gap-1 mb-3">
+                {[1, 2, 3].map((star) => (
+                  <Star
+                    key={star}
+                    size={28}
+                    className={star <= (state?.starsEarned ?? 0) ? 'text-yellow-500 fill-yellow-500' : 'text-blue-900/20'}
+                  />
+                ))}
+              </div>
+              <p className="text-blue-900/60 mb-2">{t('play.success')}</p>
+              <p className="text-sm font-mono text-blue-900/50 mb-6">
+                {t('play.final_score')}: {state?.score ?? 0}
+                {(state?.finishBonus ?? 0) > 0 ? ` (${t('play.finish_bonus')}: +${state?.finishBonus})` : ''}
+              </p>
               <div className="flex gap-4">
                 {hasMoreLevels ? (
                   <button 

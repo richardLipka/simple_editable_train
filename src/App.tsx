@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameMap, CargoType, EngineType, WallType, AppConfig, SystemAssets } from './types';
-import { INITIAL_MAP, DEFAULT_CARGO_TYPES, DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_SYSTEM_ASSETS } from './constants';
+import { GameMap, CargoType, BonusType, EngineType, WallType, AppConfig, SystemAssets } from './types';
+import { INITIAL_MAP, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES, DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_SYSTEM_ASSETS } from './constants';
+import { mergeBonusTypes, mergeCargoTypes, normalizeAppConfig, normalizeMap } from './utils/configDefaults';
 import { Play } from './components/Play';
 import { Editor } from './components/Editor';
 import { SettingsManager } from './components/SettingsManager';
@@ -15,6 +16,7 @@ export default function App() {
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
   const [editingMapIndex, setEditingMapIndex] = useState<number | null>(null);
   const [cargoTypes, setCargoTypes] = useState<CargoType[]>(DEFAULT_CARGO_TYPES);
+  const [bonusTypes, setBonusTypes] = useState<BonusType[]>(DEFAULT_BONUS_TYPES);
   const [engines, setEngines] = useState<EngineType[]>(DEFAULT_ENGINES);
   const [walls, setWalls] = useState<WallType[]>(DEFAULT_WALLS);
   const [systemAssets, setSystemAssets] = useState<SystemAssets>(DEFAULT_SYSTEM_ASSETS);
@@ -29,14 +31,19 @@ export default function App() {
       }
       const savedMaps = localStorage.getItem('train_logic_maps');
       if (savedMaps) {
-        setMaps(JSON.parse(savedMaps));
+        setMaps(JSON.parse(savedMaps).map(normalizeMap));
       } else {
         setMaps([INITIAL_MAP]);
       }
 
       const savedCargo = localStorage.getItem('train_logic_cargo');
       if (savedCargo) {
-        setCargoTypes(JSON.parse(savedCargo));
+        setCargoTypes(mergeCargoTypes(JSON.parse(savedCargo)));
+      }
+
+      const savedBonus = localStorage.getItem('train_logic_bonus');
+      if (savedBonus) {
+        setBonusTypes(mergeBonusTypes(JSON.parse(savedBonus)));
       }
 
       const savedEngines = localStorage.getItem('train_logic_engines');
@@ -65,8 +72,15 @@ export default function App() {
   };
 
   const saveCargo = (newCargo: CargoType[]) => {
-    setCargoTypes(newCargo);
-    localStorage.setItem('train_logic_cargo', JSON.stringify(newCargo));
+    const merged = mergeCargoTypes(newCargo);
+    setCargoTypes(merged);
+    localStorage.setItem('train_logic_cargo', JSON.stringify(merged));
+  };
+
+  const saveBonus = (newBonus: BonusType[]) => {
+    const merged = mergeBonusTypes(newBonus);
+    setBonusTypes(merged);
+    localStorage.setItem('train_logic_bonus', JSON.stringify(merged));
   };
 
   const saveEngines = (newEngines: EngineType[]) => {
@@ -99,6 +113,7 @@ export default function App() {
       engines,
       walls,
       cargoTypes,
+      bonusTypes,
       systemAssets,
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
@@ -112,23 +127,15 @@ export default function App() {
 
   const handleImportConfig = (config: AppConfig) => {
     if (!config || typeof config !== 'object') return;
-    
-    if (config.maps && Array.isArray(config.maps)) {
-      saveMaps(config.maps);
-    }
-    if (config.engines && Array.isArray(config.engines)) {
-      saveEngines(config.engines);
-    }
-    if (config.walls && Array.isArray(config.walls)) {
-      saveWalls(config.walls);
-    }
-    if (config.cargoTypes && Array.isArray(config.cargoTypes)) {
-      saveCargo(config.cargoTypes);
-    }
-    if (config.systemAssets) {
-      saveSystemAssets(config.systemAssets);
-    }
-    
+
+    const normalized = normalizeAppConfig(config);
+    saveMaps(normalized.maps);
+    saveEngines(normalized.engines);
+    saveWalls(normalized.walls);
+    saveCargo(normalized.cargoTypes);
+    saveBonus(normalized.bonusTypes ?? DEFAULT_BONUS_TYPES);
+    saveSystemAssets(normalized.systemAssets);
+
     alert(t('settings.import_success') || 'Configuration imported successfully!');
   };
 
@@ -139,6 +146,7 @@ export default function App() {
       name: `${t('editor.new_level_prefix')} ${maps.length + 1}`,
       grid: Array(15).fill(null).map(() => Array(20).fill('EMPTY')),
       cargoConfigs: {},
+      bonusConfigs: {},
       wallConfigs: {},
     };
     saveMaps([...maps, newMap]);
@@ -166,10 +174,12 @@ export default function App() {
         key={maps[currentMapIndex].id}
         map={maps[currentMapIndex]} 
         cargoTypes={cargoTypes}
+        bonusTypes={bonusTypes}
         engines={engines}
         walls={walls}
         systemAssets={systemAssets}
         kidsMode={kidsMode}
+        levelIndex={currentMapIndex}
         onExit={() => setMode('MENU')}
         onNextLevel={() => {
           if (currentMapIndex < maps.length - 1) {
@@ -188,6 +198,7 @@ export default function App() {
       <Editor 
         map={maps[editingMapIndex]}
         cargoTypes={cargoTypes}
+        bonusTypes={bonusTypes}
         engines={engines}
         walls={walls}
         systemAssets={systemAssets}
@@ -209,10 +220,12 @@ export default function App() {
           engines={engines}
           walls={walls}
           cargoTypes={cargoTypes}
+          bonusTypes={bonusTypes}
           systemAssets={systemAssets}
           onSaveEngines={saveEngines}
           onSaveWalls={saveWalls}
           onSaveCargo={saveCargo}
+          onSaveBonus={saveBonus}
           onSaveSystemAssets={saveSystemAssets}
           onExit={() => setMode('MENU')}
           initialTab={mode === 'CARGO_CONFIG' ? 'CARGO' : 'ENGINES'}
