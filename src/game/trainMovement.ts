@@ -6,10 +6,43 @@ export function getBlockingBodySegments(train: { x: number; y: number }[], willG
   return willGrow ? train.slice(1) : train.slice(1, -1);
 }
 
+type BlockReason = 'edge' | 'wall' | 'gate' | 'tail';
+
+function resolveBlockReason(
+  newHead: { x: number; y: number },
+  s: GameState,
+  map: GameMap,
+  isActuallyCargo: boolean,
+): BlockReason | null {
+  if (newHead.x < 0 || newHead.x >= map.width || newHead.y < 0 || newHead.y >= map.height) {
+    return 'edge';
+  }
+
+  const cell = map.grid[newHead.y][newHead.x];
+  if (cell === 'WALL') return 'wall';
+
+  if (cell === 'GATE') {
+    if (s.collectedCount < s.totalCargoCount) return 'gate';
+    return null;
+  }
+
+  const blockingBody = getBlockingBodySegments(s.train, isActuallyCargo);
+  if (blockingBody.some((p) => p.x === newHead.x && p.y === newHead.y)) {
+    return 'tail';
+  }
+
+  return null;
+}
+
+export interface MoveTrainOptions {
+  softBump?: boolean;
+}
+
 export function moveTrain(
   s: GameState,
   map: GameMap,
   cargoTypes: { id: string }[],
+  options?: MoveTrainOptions,
 ): GameState {
   if (s.isGameOver || s.isLevelComplete) return s;
 
@@ -22,27 +55,29 @@ export function moveTrain(
   if (newDirection === 'LEFT') newHead.x -= 1;
   if (newDirection === 'RIGHT') newHead.x += 1;
 
-  if (newHead.x < 0 || newHead.x >= map.width || newHead.y < 0 || newHead.y >= map.height) {
-    return { ...s, isGameOver: true };
-  }
-
-  const cell = map.grid[newHead.y][newHead.x];
   const cargoKey = `${newHead.x},${newHead.y}`;
   const collectedCargo = new Set(s.collectedCargoKeys);
+  const cellInBounds =
+    newHead.x >= 0 && newHead.x < map.width && newHead.y >= 0 && newHead.y < map.height;
+  const cell = cellInBounds ? map.grid[newHead.y][newHead.x] : null;
   const isActuallyCargo = cell === 'CARGO' && !collectedCargo.has(cargoKey);
 
-  if (cell === 'WALL') return { ...s, isGameOver: true };
+  const blockReason = resolveBlockReason(newHead, s, map, isActuallyCargo);
 
-  if (cell === 'GATE') {
-    if (s.collectedCount === s.totalCargoCount) {
-      return { ...s, isLevelComplete: true };
+  if (blockReason) {
+    if (options?.softBump) {
+      return {
+        ...s,
+        lastTrain: s.train,
+        moveProgress: 0,
+        bumpMessage: blockReason === 'gate' ? 'gate' : undefined,
+      };
     }
     return { ...s, isGameOver: true };
   }
 
-  const blockingBody = getBlockingBodySegments(s.train, isActuallyCargo);
-  if (blockingBody.some(p => p.x === newHead.x && p.y === newHead.y)) {
-    return { ...s, isGameOver: true };
+  if (cell === 'GATE' && s.collectedCount === s.totalCargoCount) {
+    return { ...s, isLevelComplete: true, bumpMessage: undefined };
   }
 
   let newTrain = [newHead, ...s.train];
@@ -63,7 +98,6 @@ export function moveTrain(
     }
     newCarriages.push(cargoId);
   } else {
-    // Drop the vacated tail position only — wagon types stay tied to their segments
     newTrain.pop();
   }
 
@@ -76,6 +110,7 @@ export function moveTrain(
     collectedCount: newCollectedCount,
     score: newScore,
     collectedCargoKeys: newCollectedCargoKeys,
+    bumpMessage: undefined,
   };
 }
 
@@ -86,6 +121,5 @@ export function getSegmentOrigin(
   index: number,
 ): { x: number; y: number } {
   if (index < lastTrain.length) return lastTrain[index];
-  // New carriage after growth: appears at its cell without sliding in
   return train[index];
 }

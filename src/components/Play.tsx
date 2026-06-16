@@ -20,7 +20,8 @@ function needsHudUpdate(prev: GameState, next: GameState): boolean {
     prev.collectedCount !== next.collectedCount ||
     prev.isGameOver !== next.isGameOver ||
     prev.isLevelComplete !== next.isLevelComplete ||
-    prev.train.length !== next.train.length
+    prev.train.length !== next.train.length ||
+    prev.bumpMessage !== next.bumpMessage
   );
 }
 
@@ -30,12 +31,13 @@ interface PlayProps {
   engines: EngineType[];
   walls: WallType[];
   systemAssets: SystemAssets;
+  kidsMode: boolean;
   onExit: () => void;
   onNextLevel: () => void;
   hasMoreLevels: boolean;
 }
 
-export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, systemAssets, onExit, onNextLevel, hasMoreLevels }) => {
+export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, systemAssets, kidsMode, onExit, onNextLevel, hasMoreLevels }) => {
   const { t } = useTranslation();
   const [state, setState] = useState<GameState | null>(null);
   const [showPath, setShowPath] = useState(false);
@@ -49,7 +51,12 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
   const assetsReadyRef = useRef(false);
   const showPathRef = useRef(false);
   const resetTimingRef = useRef(true);
+  const kidsModeRef = useRef(kidsMode);
   const imageCache = getImageCache();
+
+  useEffect(() => {
+    kidsModeRef.current = kidsMode;
+  }, [kidsMode]);
 
   useEffect(() => {
     isPausedRef.current = isPaused;
@@ -381,7 +388,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
         let next = current;
 
         while (newProgress >= 1 && !next.isGameOver && !next.isLevelComplete) {
-          next = moveTrain(next, map, cargoTypes);
+          next = moveTrain(next, map, cargoTypes, { softBump: kidsModeRef.current });
           newProgress -= 1;
         }
 
@@ -481,6 +488,18 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, engines, walls, sys
         />
 
         <AnimatePresence>
+          {state?.bumpMessage === 'gate' && kidsMode && (
+            <motion.div
+              key="gate-hint"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-yellow-100 border-2 border-yellow-500 rounded-xl text-sm font-bold text-blue-950 shadow-sm pointer-events-none"
+            >
+              {t('play.gate_hint')}
+            </motion.div>
+          )}
+
           {state?.isGameOver && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}

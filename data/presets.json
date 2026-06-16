@@ -1,0 +1,10 @@
+{
+  "presets": [
+    {
+      "id": "default",
+      "name": "Default levels",
+      "description": "Built-in maps, engines, walls, and cargo types",
+      "file": "defaultData.json"
+    }
+  ]
+}

@@ -81,4 +81,5 @@ export interface GameState {
   collectedCount: number;
   totalCargoCount: number;
   collectedCargoKeys: string[]; // Array of "x,y" strings
+  bumpMessage?: 'gate';
 }

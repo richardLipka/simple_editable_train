@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EngineType, WallType, CargoType, AppConfig, SystemAssets } from '../types';
 import { DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_CARGO_TYPES, EMOJI_LIST, DEFAULT_SYSTEM_ASSETS } from '../constants';
-import { Trash2, Plus, Image as ImageIcon, X, Save, Smile, TrainFront, BrickWall, Package, Download, Upload, Pencil, ArrowLeftRight, LayoutGrid } from 'lucide-react';
+import { fetchPresetsManifest, fetchPresetConfig, isValidAppConfig, PresetEntry } from '../services/configService';
+import { Trash2, Plus, Image as ImageIcon, X, Save, Smile, TrainFront, BrickWall, Package, Download, Upload, Pencil, ArrowLeftRight, LayoutGrid, FolderOpen, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CargoImageEditor } from './CargoImageEditor';
 import { SketchPad } from './SketchPad';
@@ -53,6 +54,12 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     initial?: string;
   } | null>(null);
   const [pickingEmoji, setPickingEmoji] = useState<'emoji' | 'cargoEmoji' | 'carriageEmoji' | 'startEmoji' | 'gateOpenEmoji' | 'gateClosedEmoji' | 'randomCargoEmoji' | null>(null);
+
+  const [presets, setPresets] = useState<PresetEntry[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [presetsError, setPresetsError] = useState<string | null>(null);
 
   const [currentSystemAssets, setCurrentSystemAssets] = useState<SystemAssets>(systemAssets);
 
@@ -195,6 +202,46 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     onSaveSystemAssets(currentSystemAssets);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    setPresetsLoading(true);
+    fetchPresetsManifest()
+      .then((manifest) => {
+        if (cancelled) return;
+        setPresets(manifest.presets);
+        if (manifest.presets.length > 0) {
+          setSelectedPresetId(manifest.presets[0].id);
+        }
+        setPresetsError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Failed to load presets manifest', err);
+        setPresets([]);
+        setPresetsError(t('settings.presets_unavailable'));
+      })
+      .finally(() => {
+        if (!cancelled) setPresetsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleLoadPreset = async () => {
+    const preset = presets.find((p) => p.id === selectedPresetId);
+    if (!preset) return;
+
+    setPresetLoading(true);
+    try {
+      const config = await fetchPresetConfig(preset.file);
+      onImportConfig(config);
+    } catch (err) {
+      console.error('Failed to load preset', err);
+      alert(t('settings.preset_load_error'));
+    } finally {
+      setPresetLoading(false);
+    }
+  };
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -203,13 +250,18 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     reader.onload = (event) => {
       try {
         const config = JSON.parse(event.target?.result as string);
+        if (!isValidAppConfig(config)) {
+          alert(t('settings.import_invalid'));
+          return;
+        }
         onImportConfig(config);
       } catch (err) {
         console.error('Failed to parse config file', err);
-        alert('Invalid configuration file');
+        alert(t('settings.import_invalid'));
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -268,6 +320,38 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                 className="absolute inset-0 opacity-0 cursor-pointer"
               />
             </div>
+            {presetsLoading ? (
+              <div className="sketch-button bg-white text-blue-950/50 font-bold flex items-center gap-2 text-sm cursor-default">
+                <Loader2 size={18} className="animate-spin" />
+                <span className="hidden sm:inline">{t('settings.presets_loading')}</span>
+              </div>
+            ) : presets.length > 0 ? (
+              <>
+                <select
+                  value={selectedPresetId}
+                  onChange={(e) => setSelectedPresetId(e.target.value)}
+                  className="sketch-button bg-white text-blue-950 font-bold text-sm max-w-[12rem] truncate"
+                  title={presets.find((p) => p.id === selectedPresetId)?.description}
+                >
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleLoadPreset}
+                  disabled={presetLoading}
+                  className="sketch-button bg-white text-blue-950 font-bold flex items-center gap-2 text-sm disabled:opacity-50"
+                  title={t('settings.load_preset')}
+                >
+                  {presetLoading ? <Loader2 size={18} className="animate-spin" /> : <FolderOpen size={18} />}
+                  <span className="hidden sm:inline">{t('settings.load_preset')}</span>
+                </button>
+              </>
+            ) : presetsError ? (
+              <span className="text-xs font-mono text-blue-950/40 self-center hidden lg:inline">{presetsError}</span>
+            ) : null}
           </div>
             <button 
               onClick={() => {

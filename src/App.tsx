@@ -5,7 +5,7 @@ import { INITIAL_MAP, DEFAULT_CARGO_TYPES, DEFAULT_ENGINES, DEFAULT_WALLS, DEFAU
 import { Play } from './components/Play';
 import { Editor } from './components/Editor';
 import { SettingsManager } from './components/SettingsManager';
-import { TrainFront, Map as MapIcon, Plus, Trash2, Play as PlayIcon, ChevronUp, ChevronDown, PackagePlus, Settings } from 'lucide-react';
+import { TrainFront, Map as MapIcon, Plus, Trash2, Play as PlayIcon, ChevronUp, ChevronDown, PackagePlus, Settings, Baby } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -18,10 +18,15 @@ export default function App() {
   const [engines, setEngines] = useState<EngineType[]>(DEFAULT_ENGINES);
   const [walls, setWalls] = useState<WallType[]>(DEFAULT_WALLS);
   const [systemAssets, setSystemAssets] = useState<SystemAssets>(DEFAULT_SYSTEM_ASSETS);
+  const [kidsMode, setKidsMode] = useState(false);
 
   // Load persisted config after first paint to avoid startup jank
   useEffect(() => {
     const loadSaved = () => {
+      const savedKidsMode = localStorage.getItem('train_logic_kids_mode');
+      if (savedKidsMode !== null) {
+        setKidsMode(savedKidsMode === 'true');
+      }
       const savedMaps = localStorage.getItem('train_logic_maps');
       if (savedMaps) {
         setMaps(JSON.parse(savedMaps));
@@ -77,6 +82,14 @@ export default function App() {
   const saveSystemAssets = (newSystem: SystemAssets) => {
     setSystemAssets(newSystem);
     localStorage.setItem('train_logic_system', JSON.stringify(newSystem));
+  };
+
+  const toggleKidsMode = () => {
+    setKidsMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('train_logic_kids_mode', String(next));
+      return next;
+    });
   };
 
   const handleExportConfig = () => {
@@ -156,6 +169,7 @@ export default function App() {
         engines={engines}
         walls={walls}
         systemAssets={systemAssets}
+        kidsMode={kidsMode}
         onExit={() => setMode('MENU')}
         onNextLevel={() => {
           if (currentMapIndex < maps.length - 1) {
@@ -314,6 +328,31 @@ export default function App() {
               </section>
 
               <section className="flex flex-col gap-6">
+                <div className="sketch-card bg-white">
+                  <label className="flex items-center justify-between gap-4 cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg border-2 transition-colors ${kidsMode ? 'bg-yellow-100 border-yellow-500 text-yellow-700' : 'bg-blue-50 border-blue-950/20 text-blue-900/50'}`}>
+                        <Baby size={22} />
+                      </div>
+                      <div>
+                        <span className="font-bold text-lg block">{t('app.kids_mode')}</span>
+                        <span className="text-sm text-blue-900/60">{t('app.kids_mode_desc')}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={kidsMode}
+                      onClick={toggleKidsMode}
+                      className={`relative w-14 h-8 rounded-full border-2 transition-colors shrink-0 ${kidsMode ? 'bg-yellow-400 border-yellow-600' : 'bg-blue-100 border-blue-950/20'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white border-2 border-blue-950/20 transition-transform ${kidsMode ? 'translate-x-6' : ''}`}
+                      />
+                    </button>
+                  </label>
+                </div>
+
                 <div className="sketch-card flex flex-col items-center text-center bg-blue-50/30">
                   <div className="w-20 h-20 bg-blue-950 text-white sketch-border flex items-center justify-center mb-6">
                     <PlayIcon size={32} fill="currentColor" />

@@ -10,6 +10,8 @@
     "start_campaign": "Start Campaign",
     "campaign_desc": "Begin your journey from level 1 and deliver all cargo to unlock the exit gates.",
     "play_now": "PLAY NOW",
+    "kids_mode": "Kids mode",
+    "kids_mode_desc": "Gentle bumps — the train stops instead of crashing",
     "instructions": "Instructions",
     "instr_1": "1. Use arrow keys to control the train head.",
     "instr_2": "2. Collect cargo to add carriages and increase score.",
@@ -29,7 +31,8 @@
     "success": "All cargo delivered successfully.",
     "next_level": "NEXT LEVEL",
     "main_menu": "MAIN MENU",
-    "controls_hint": "ARROWS TO STEER • SPACE/P TO PAUSE • M(+) / N(-) SPEED"
+    "controls_hint": "ARROWS TO STEER • SPACE/P TO PAUSE • M(+) / N(-) SPEED",
+    "gate_hint": "Collect all gifts first!"
   },
   "editor": {
     "title": "Map Editor",
@@ -101,6 +104,11 @@
     "export_config": "EXPORT ALL DATA",
     "import_config": "IMPORT FROM FILE",
     "import_success": "Configuration imported successfully!",
+    "import_invalid": "Invalid configuration file",
+    "load_preset": "LOAD PRESET",
+    "presets_loading": "Loading presets...",
+    "presets_unavailable": "Presets unavailable",
+    "preset_load_error": "Failed to load preset",
     "upload": "UPLOAD",
     "draw": "DRAW",
     "sketch_engine": "Sketch Engine",

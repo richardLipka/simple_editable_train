@@ -10,6 +10,8 @@
     "start_campaign": "Spustit kampaň",
     "campaign_desc": "Začněte svou cestu od 1. úrovně a doručte veškerý náklad, abyste odemkli únikové brány.",
     "play_now": "HRÁT HNED",
+    "kids_mode": "Režim pro děti",
+    "kids_mode_desc": "Mírné nárazy — vlak se zastaví místo havárie",
     "instructions": "Instrukce",
     "instr_1": "1. Pomocí šipek ovládejte hlavu vlaku.",
     "instr_2": "2. Sbírejte náklad, abyste přidali vagóny a zvýšili skóre.",
@@ -29,7 +31,8 @@
     "success": "Veškerý náklad byl úspěšně doručen.",
     "next_level": "DALŠÍ ÚROVEŇ",
     "main_menu": "HLAVNÍ MENU",
-    "controls_hint": "ŠIPKY K ŘÍZENÍ • MEZERNÍK/P PRO PAUZU • M(+) / N(-) RYCHLOST"
+    "controls_hint": "ŠIPKY K ŘÍZENÍ • MEZERNÍK/P PRO PAUZU • M(+) / N(-) RYCHLOST",
+    "gate_hint": "Nejdřív seber všechny dárky!"
   },
   "editor": {
     "title": "Editor map",
@@ -101,6 +104,11 @@
     "export_config": "EXPORT VŠECH DAT",
     "import_config": "IMPORTOVAT ZE SOUBORU",
     "import_success": "Konfigurace byla úspěšně importována!",
+    "import_invalid": "Neplatný konfigurační soubor",
+    "load_preset": "NAČÍST PŘEDNASTAVENÍ",
+    "presets_loading": "Načítání přednastavení...",
+    "presets_unavailable": "Přednastavení nejsou k dispozici",
+    "preset_load_error": "Nepodařilo se načíst přednastavení",
     "upload": "NAHRÁT",
     "draw": "KRESLIT",
     "sketch_engine": "Nakreslit lokomotivu",
