@@ -1,0 +1,1002 @@
+import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { EngineType, WallType, CargoType, AppConfig, SystemAssets } from '../types';
+import { DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_CARGO_TYPES, EMOJI_LIST, DEFAULT_SYSTEM_ASSETS } from '../constants';
+import { Trash2, Plus, Image as ImageIcon, X, Save, Smile, TrainFront, BrickWall, Package, Download, Upload, Pencil, ArrowLeftRight, LayoutGrid } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { CargoImageEditor } from './CargoImageEditor';
+import { SketchPad } from './SketchPad';
+
+interface SettingsManagerProps {
+  engines: EngineType[];
+  walls: WallType[];
+  cargoTypes: CargoType[];
+  systemAssets: SystemAssets;
+  onSaveEngines: (engines: EngineType[]) => void;
+  onSaveWalls: (walls: WallType[]) => void;
+  onSaveCargo: (cargo: CargoType[]) => void;
+  onSaveSystemAssets: (system: SystemAssets) => void;
+  onExit: () => void;
+  initialTab?: 'ENGINES' | 'WALLS' | 'CARGO' | 'SYSTEM';
+  selectedEngineId?: string;
+  onSelectEngine?: (id: string) => void;
+  onExportConfig: () => void;
+  onImportConfig: (config: AppConfig) => void;
+}
+
+export const SettingsManager: React.FC<SettingsManagerProps> = ({ 
+  engines, 
+  walls, 
+  cargoTypes,
+  systemAssets,
+  onSaveEngines, 
+  onSaveWalls, 
+  onSaveCargo,
+  onSaveSystemAssets,
+  onExit,
+  initialTab = 'ENGINES',
+  selectedEngineId,
+  onSelectEngine,
+  onExportConfig,
+  onImportConfig
+}) => {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<'ENGINES' | 'WALLS' | 'CARGO' | 'SYSTEM'>(initialTab);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingImage, setEditingImage] = useState<{
+    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
+    src: string;
+  } | null>(null);
+  const [sketching, setSketching] = useState<{
+    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
+    initial?: string;
+  } | null>(null);
+  const [pickingEmoji, setPickingEmoji] = useState<'emoji' | 'cargoEmoji' | 'carriageEmoji' | 'startEmoji' | 'gateOpenEmoji' | 'gateClosedEmoji' | 'randomCargoEmoji' | null>(null);
+
+  const [currentSystemAssets, setCurrentSystemAssets] = useState<SystemAssets>(systemAssets);
+
+  const [newEngine, setNewEngine] = useState<Partial<EngineType>>({
+    id: '',
+    name: '',
+    emoji: '🚂',
+  });
+
+  const [newWall, setNewWall] = useState<Partial<WallType>>({
+    id: '',
+    name: '',
+    emoji: '🧱',
+  });
+
+  const [newCargo, setNewCargo] = useState<Partial<CargoType>>({
+    id: '',
+    name: '',
+    cargoEmoji: '🎁',
+    carriageEmoji: '🚃',
+    color: '#10b981',
+  });
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setEditingImage({ type, src: event.target.result as string });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCropComplete = (croppedImage: string) => {
+    if (editingImage) {
+      if (editingImage.type === 'engine') {
+        setNewEngine(prev => ({ ...prev, image: croppedImage }));
+      } else if (editingImage.type === 'wall') {
+        setNewWall(prev => ({ ...prev, image: croppedImage }));
+      } else if (editingImage.type === 'cargo') {
+        setNewCargo(prev => ({ ...prev, cargoImage: croppedImage }));
+      } else if (editingImage.type === 'carriage') {
+        setNewCargo(prev => ({ ...prev, carriageImage: croppedImage }));
+      } else if (editingImage.type === 'start') {
+        setCurrentSystemAssets(prev => ({ ...prev, startImage: croppedImage }));
+      } else if (editingImage.type === 'gateOpen') {
+        setCurrentSystemAssets(prev => ({ ...prev, gateOpenImage: croppedImage }));
+      } else if (editingImage.type === 'gateClosed') {
+        setCurrentSystemAssets(prev => ({ ...prev, gateClosedImage: croppedImage }));
+      } else if (editingImage.type === 'randomCargo') {
+        setCurrentSystemAssets(prev => ({ ...prev, randomCargoImage: croppedImage }));
+      }
+      setEditingImage(null);
+    }
+  };
+
+  const handleAddEngine = () => {
+    if (newEngine.id && newEngine.name) {
+      if (editingId) {
+        onSaveEngines(engines.map(e => e.id === editingId ? (newEngine as EngineType) : e));
+      } else {
+        onSaveEngines([...engines, newEngine as EngineType]);
+      }
+      setIsAdding(false);
+      setEditingId(null);
+      setNewEngine({ id: '', name: '', emoji: '🚂' });
+    }
+  };
+
+  const handleAddWall = () => {
+    if (newWall.id && newWall.name) {
+      if (editingId) {
+        onSaveWalls(walls.map(w => w.id === editingId ? (newWall as WallType) : w));
+      } else {
+        onSaveWalls([...walls, newWall as WallType]);
+      }
+      setIsAdding(false);
+      setEditingId(null);
+      setNewWall({ id: '', name: '', emoji: '🧱' });
+    }
+  };
+
+  const handleAddCargo = () => {
+    if (newCargo.id && newCargo.name) {
+      if (editingId) {
+        onSaveCargo(cargoTypes.map(c => c.id === editingId ? (newCargo as CargoType) : c));
+      } else {
+        onSaveCargo([...cargoTypes, newCargo as CargoType]);
+      }
+      setIsAdding(false);
+      setEditingId(null);
+      setNewCargo({ id: '', name: '', cargoEmoji: '🎁', carriageEmoji: '🚃', color: '#10b981' });
+    }
+  };
+
+  const handleDeleteEngine = (id: string) => {
+    onSaveEngines(engines.filter(e => e.id !== id));
+  };
+
+  const handleEditEngine = (engine: EngineType) => {
+    setNewEngine(engine);
+    setEditingId(engine.id);
+    setIsAdding(true);
+  };
+
+  const handleDeleteWall = (id: string) => {
+    onSaveWalls(walls.filter(w => w.id !== id));
+  };
+
+  const handleEditWall = (wall: WallType) => {
+    setNewWall(wall);
+    setEditingId(wall.id);
+    setIsAdding(true);
+  };
+
+  const handleDeleteCargo = (id: string) => {
+    onSaveCargo(cargoTypes.filter(c => c.id !== id));
+  };
+
+  const handleEditCargo = (cargo: CargoType) => {
+    setNewCargo(cargo);
+    setEditingId(cargo.id);
+    setIsAdding(true);
+  };
+
+  const handleSwapCargoImages = () => {
+    setNewCargo(prev => ({
+      ...prev,
+      cargoImage: prev.carriageImage,
+      carriageImage: prev.cargoImage,
+      cargoEmoji: prev.carriageEmoji,
+      carriageEmoji: prev.cargoEmoji
+    }));
+  };
+
+  const handleSaveSystem = () => {
+    onSaveSystemAssets(currentSystemAssets);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const config = JSON.parse(event.target?.result as string);
+        onImportConfig(config);
+      } catch (err) {
+        console.error('Failed to parse config file', err);
+        alert('Invalid configuration file');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="w-full max-w-5xl"
+    >
+      {sketching && (
+        <SketchPad 
+          title={t(`settings.sketch_${sketching.type}`)}
+          initialImage={sketching.initial}
+          onCancel={() => setSketching(null)}
+          onSave={(base64) => {
+            if (sketching.type === 'engine') setNewEngine(prev => ({ ...prev, image: base64 }));
+            if (sketching.type === 'wall') setNewWall(prev => ({ ...prev, image: base64 }));
+            if (sketching.type === 'cargo') setNewCargo(prev => ({ ...prev, cargoImage: base64 }));
+            if (sketching.type === 'carriage') setNewCargo(prev => ({ ...prev, carriageImage: base64 }));
+            if (sketching.type === 'start') setCurrentSystemAssets(prev => ({ ...prev, startImage: base64 }));
+            if (sketching.type === 'gateOpen') setCurrentSystemAssets(prev => ({ ...prev, gateOpenImage: base64 }));
+            if (sketching.type === 'gateClosed') setCurrentSystemAssets(prev => ({ ...prev, gateClosedImage: base64 }));
+            if (sketching.type === 'randomCargo') setCurrentSystemAssets(prev => ({ ...prev, randomCargoImage: base64 }));
+            setSketching(null);
+          }}
+        />
+      )}
+
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight">{t('settings.title')}</h2>
+          <p className="text-blue-900/40 font-mono text-xs uppercase tracking-widest">{t('settings.subtitle')}</p>
+        </div>
+        <div className="flex gap-3">
+          <div className="flex gap-2 mr-4 border-r border-blue-950/10 pr-4">
+            <button 
+              onClick={onExportConfig}
+              className="sketch-button bg-white text-blue-950 font-bold flex items-center gap-2 text-sm"
+              title={t('settings.export_config')}
+            >
+              <Download size={18} />
+              <span className="hidden sm:inline">{t('settings.export_config')}</span>
+            </button>
+            <div className="relative">
+              <button 
+                className="sketch-button bg-white text-blue-950 font-bold flex items-center gap-2 text-sm"
+                title={t('settings.import_config')}
+              >
+                <Upload size={18} />
+                <span className="hidden sm:inline">{t('settings.import_config')}</span>
+              </button>
+              <input 
+                type="file" 
+                accept=".json"
+                onChange={handleImport}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+            </div>
+          </div>
+            <button 
+              onClick={() => {
+                if (tab === 'SYSTEM') {
+                  handleSaveSystem();
+                  onExit();
+                } else {
+                  setIsAdding(true);
+                  setEditingId(null);
+                  if (tab === 'ENGINES') setNewEngine({ id: '', name: '', emoji: '🚂' });
+                  else if (tab === 'WALLS') setNewWall({ id: '', name: '', emoji: '🧱' });
+                  else setNewCargo({ id: '', name: '', cargoEmoji: '🎁', carriageEmoji: '🚃', color: '#10b981' });
+                }
+              }}
+              className="sketch-button bg-blue-950 text-white font-bold flex items-center gap-2"
+            >
+              {tab === 'SYSTEM' ? (
+                <>
+                  <Save size={18} />
+                  {t('settings.save_system')}
+                </>
+              ) : (
+                <>
+                  <Plus size={18} />
+                  {t('settings.add')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')}
+                </>
+              )}
+            </button>
+          <button 
+            onClick={onExit}
+            className="sketch-button bg-white text-blue-950 font-bold"
+          >
+            {t('settings.back')}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-4 mb-8">
+        <button 
+          onClick={() => { setTab('ENGINES'); setIsAdding(false); setEditingId(null); }}
+          className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${tab === 'ENGINES' ? 'bg-blue-950 text-white' : 'bg-white text-blue-900/40 hover:text-blue-950 border border-blue-950/20'}`}
+        >
+          <TrainFront size={18} />
+          {t('settings.engines')}
+        </button>
+        <button 
+          onClick={() => { setTab('WALLS'); setIsAdding(false); setEditingId(null); }}
+          className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${tab === 'WALLS' ? 'bg-blue-950 text-white' : 'bg-white text-blue-900/40 hover:text-blue-950 border border-blue-950/20'}`}
+        >
+          <BrickWall size={18} />
+          {t('settings.walls')}
+        </button>
+        <button 
+          onClick={() => { setTab('CARGO'); setIsAdding(false); setEditingId(null); }}
+          className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${tab === 'CARGO' ? 'bg-blue-950 text-white' : 'bg-white text-blue-900/40 hover:text-blue-950 border border-blue-950/20'}`}
+        >
+          <Package size={18} />
+          {t('settings.cargo')}
+        </button>
+        <button 
+          onClick={() => { setTab('SYSTEM'); setIsAdding(false); setEditingId(null); }}
+          className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${tab === 'SYSTEM' ? 'bg-blue-950 text-white' : 'bg-white text-blue-900/40 hover:text-blue-950 border border-blue-950/20'}`}
+        >
+          <LayoutGrid size={18} />
+          {t('settings.system')}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {isAdding && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="col-span-full sketch-card bg-white border-blue-950 p-8 mb-8"
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <div className="space-y-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    {editingId ? <ImageIcon className="text-blue-950" /> : <Plus className="text-blue-950" />}
+                    {editingId ? t('settings.edit') : t('settings.new')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')} {t('settings.definition')}
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.id')}</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. futuristic-engine"
+                        disabled={!!editingId}
+                        value={tab === 'ENGINES' ? newEngine.id : tab === 'WALLS' ? newWall.id : newCargo.id}
+                        onChange={e => {
+                          if (tab === 'ENGINES') setNewEngine({...newEngine, id: e.target.value});
+                          else if (tab === 'WALLS') setNewWall({...newWall, id: e.target.value});
+                          else setNewCargo({...newCargo, id: e.target.value});
+                        }}
+                        className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.name')}</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Neo-Steam 2099"
+                        value={tab === 'ENGINES' ? newEngine.name : tab === 'WALLS' ? newWall.name : newCargo.name}
+                        onChange={e => {
+                          if (tab === 'ENGINES') setNewEngine({...newEngine, name: e.target.value});
+                          else if (tab === 'WALLS') setNewWall({...newWall, name: e.target.value});
+                          else setNewCargo({...newCargo, name: e.target.value});
+                        }}
+                        className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-950 transition-colors"
+                      />
+                    </div>
+
+                    {tab === 'CARGO' ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.cargo_emoji')}</label>
+                            <div className="relative">
+                              <input 
+                                type="text" 
+                                value={newCargo.cargoEmoji}
+                                readOnly
+                                onClick={() => setPickingEmoji('cargoEmoji')}
+                                className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 text-center text-2xl cursor-pointer hover:border-blue-950 transition-colors"
+                              />
+                              <Smile className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900/40 pointer-events-none" size={18} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.carriage_emoji')}</label>
+                            <div className="relative">
+                              <input 
+                                type="text" 
+                                value={newCargo.carriageEmoji}
+                                readOnly
+                                onClick={() => setPickingEmoji('carriageEmoji')}
+                                className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 text-center text-2xl cursor-pointer hover:border-blue-950 transition-colors"
+                              />
+                              <Smile className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900/40 pointer-events-none" size={18} />
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.theme_color')}</label>
+                          <input 
+                            type="color" 
+                            value={newCargo.color}
+                            onChange={e => setNewCargo({...newCargo, color: e.target.value})}
+                            className="w-full h-[54px] bg-white border border-blue-950/20 rounded-xl p-1 cursor-pointer"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <label className="block text-xs font-mono text-blue-900/40 uppercase mb-2">{t('settings.fallback_emoji')}</label>
+                        <div className="relative">
+                          <input 
+                            type="text" 
+                            value={tab === 'ENGINES' ? newEngine.emoji : newWall.emoji}
+                            readOnly
+                            onClick={() => setPickingEmoji('emoji')}
+                            className="w-full bg-white border border-blue-950/20 rounded-xl px-4 py-3 text-center text-2xl cursor-pointer hover:border-blue-950 transition-colors"
+                          />
+                          <Smile className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900/40 pointer-events-none" size={18} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  {tab === 'CARGO' ? (
+                    <div className="grid grid-cols-2 gap-8 relative">
+                      <button 
+                        onClick={handleSwapCargoImages}
+                        className="absolute left-1/2 top-[135px] -translate-x-1/2 z-10 w-10 h-10 bg-blue-950 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform border-4 border-white"
+                        title={t('settings.swap_images')}
+                      >
+                        <ArrowLeftRight size={20} />
+                      </button>
+                      <div className="space-y-4">
+                        <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.cargo_icon')}</label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
+                              <ImageIcon size={14} />
+                              {t('settings.upload')}
+                            </button>
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={e => handleImageUpload(e, 'cargo')}
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                            />
+                          </div>
+                          <button 
+                            onClick={() => setSketching({ type: 'cargo', initial: newCargo.cargoImage })}
+                            className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
+                          >
+                            <Pencil size={14} />
+                            {t('settings.draw')}
+                          </button>
+                        </div>
+                        <div className="aspect-square bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+                          {newCargo.cargoImage ? (
+                            <img src={newCargo.cargoImage} alt="Cargo" className="w-full h-full object-contain" />
+                          ) : (
+                            <div className="text-center p-4">
+                              <ImageIcon className="mx-auto mb-2 text-blue-900/20" size={32} />
+                              <p className="text-[10px] text-blue-900/40">Upload Image</p>
+                            </div>
+                          )}
+                          {newCargo.cargoImage && (
+                            <button 
+                              onClick={() => setNewCargo({...newCargo, cargoImage: undefined})}
+                              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                    <div className="space-y-4">
+                      <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.carriage_icon')}</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
+                            <ImageIcon size={14} />
+                            {t('settings.upload')}
+                          </button>
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            onChange={e => handleImageUpload(e, 'carriage')}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                        </div>
+                        <button 
+                          onClick={() => setSketching({ type: 'carriage', initial: newCargo.carriageImage })}
+                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
+                        >
+                          <Pencil size={14} />
+                          {t('settings.draw')}
+                        </button>
+                      </div>
+                      <div className="aspect-square bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+                        {newCargo.carriageImage ? (
+                          <img src={newCargo.carriageImage} alt="Carriage" className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="text-center p-4">
+                            <ImageIcon className="mx-auto mb-2 text-blue-900/20" size={32} />
+                            <p className="text-[10px] text-blue-900/40">{t('settings.carriage_visual')}</p>
+                          </div>
+                        )}
+                        {newCargo.carriageImage && (
+                          <button 
+                            onClick={() => setNewCargo({...newCargo, carriageImage: undefined})}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.custom_asset')}</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
+                            <ImageIcon size={14} />
+                            {t('settings.upload')}
+                          </button>
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            onChange={e => handleImageUpload(e, tab === 'ENGINES' ? 'engine' : 'wall')}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                        </div>
+                        <button 
+                          onClick={() => setSketching({ type: tab === 'ENGINES' ? 'engine' : 'wall', initial: tab === 'ENGINES' ? newEngine.image : newWall.image })}
+                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
+                        >
+                          <Pencil size={14} />
+                          {t('settings.draw')}
+                        </button>
+                      </div>
+                      <div className="aspect-square max-w-[200px] bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+                        {(tab === 'ENGINES' ? newEngine.image : newWall.image) ? (
+                          <img src={tab === 'ENGINES' ? newEngine.image : newWall.image} alt="Asset" className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="text-center p-4">
+                            <ImageIcon className="mx-auto mb-2 text-blue-900/20" size={32} />
+                            <p className="text-[10px] text-blue-900/40">Upload Image</p>
+                          </div>
+                        )}
+                        {(tab === 'ENGINES' ? newEngine.image : newWall.image) && (
+                          <button 
+                            onClick={() => tab === 'ENGINES' ? setNewEngine({...newEngine, image: undefined}) : setNewWall({...newWall, image: undefined})}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-4">
+                    <button 
+                      onClick={() => setIsAdding(false)}
+                      className="flex-1 py-4 sketch-button bg-white text-blue-900/40 font-bold"
+                    >
+                      {t('settings.cancel')}
+                    </button>
+                    <button 
+                      onClick={tab === 'ENGINES' ? handleAddEngine : tab === 'WALLS' ? handleAddWall : handleAddCargo}
+                      disabled={
+                        tab === 'ENGINES' ? (!newEngine.id || !newEngine.name) : 
+                        tab === 'WALLS' ? (!newWall.id || !newWall.name) : 
+                        (!newCargo.id || !newCargo.name)
+                      }
+                      className="flex-1 py-4 sketch-button bg-blue-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center justify-center gap-2"
+                    >
+                      <Save size={20} />
+                      {editingId ? t('settings.update') : t('settings.save')} {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {tab !== 'SYSTEM' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {tab === 'ENGINES' ? engines.map((e, idx) => (
+            <motion.div 
+              layout
+              key={e.id} 
+              className={`group relative sketch-card bg-white border transition-all ${selectedEngineId === e.id ? 'border-blue-950 shadow-lg' : 'border-blue-950/20'}`}
+            >
+              {selectedEngineId === e.id && (
+                <div className="absolute -top-3 -right-3 bg-blue-950 text-white px-3 py-1 rounded-full text-[10px] font-black italic tracking-tighter z-10 shadow-lg">
+                  {t('settings.selected')}
+                </div>
+              )}
+              <div className="flex items-start justify-between mb-6">
+                <div 
+                  className="flex items-center gap-4 cursor-pointer flex-1"
+                  onClick={() => onSelectEngine?.(e.id)}
+                >
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl relative overflow-hidden transition-all ${selectedEngineId === e.id ? 'bg-blue-50' : 'bg-white'}`}>
+                    {e.image ? (
+                      <img src={e.image} alt={e.name} className="w-full h-full object-contain p-2" />
+                    ) : (
+                      e.emoji
+                    )}
+                  </div>
+                  <div>
+                    <h4 className={`font-bold text-lg transition-colors ${selectedEngineId === e.id ? 'text-blue-950 underline underline-offset-4' : ''}`}>{e.name}</h4>
+                    <p className="text-xs font-mono text-blue-900/40 uppercase tracking-tighter">{e.id}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => handleEditEngine(e)}
+                    className="p-2 text-blue-900/40 hover:text-blue-950 transition-colors"
+                  >
+                    <ImageIcon size={18} />
+                  </button>
+                  {idx >= DEFAULT_ENGINES.length && (
+                    <button 
+                      onClick={() => handleDeleteEngine(e.id)}
+                      className="p-2 text-blue-900/40 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {selectedEngineId !== e.id && (
+                <button 
+                  onClick={() => onSelectEngine?.(e.id)}
+                  className="w-full py-2 bg-white border border-blue-950 text-blue-950 text-[10px] font-bold rounded-xl transition-all uppercase tracking-widest"
+                >
+                  {t('settings.select_for_game')}
+                </button>
+              )}
+            </motion.div>
+          )) : tab === 'WALLS' ? walls.map((w, idx) => (
+            <motion.div 
+              layout
+              key={w.id} 
+              className="group relative sketch-card bg-white border border-blue-950/20 p-6 transition-all"
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center text-3xl relative overflow-hidden">
+                    {w.image ? (
+                      <img src={w.image} alt={w.name} className="w-full h-full object-contain p-2" />
+                    ) : (
+                      w.emoji
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg">{w.name}</h4>
+                    <p className="text-xs font-mono text-blue-900/40 uppercase tracking-tighter">{w.id}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => handleEditWall(w)}
+                    className="p-2 text-blue-900/40 hover:text-blue-950 transition-colors"
+                  >
+                    <ImageIcon size={18} />
+                  </button>
+                  {idx >= DEFAULT_WALLS.length && (
+                    <button 
+                      onClick={() => handleDeleteWall(w.id)}
+                      className="p-2 text-blue-900/40 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )) : cargoTypes.map((c, idx) => (
+            <motion.div 
+              layout
+              key={c.id} 
+              className="group relative sketch-card bg-white border border-blue-950/20 p-6 transition-all"
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl relative overflow-hidden" style={{ backgroundColor: `${c.color}22` }}>
+                    {c.cargoImage ? (
+                      <img src={c.cargoImage} alt={c.name} className="w-full h-full object-contain p-2" />
+                    ) : (
+                      c.cargoEmoji
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg">{c.name}</h4>
+                    <p className="text-xs font-mono text-blue-900/40 uppercase tracking-tighter">{c.id}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => handleEditCargo(c)}
+                    className="p-2 text-blue-900/40 hover:text-blue-950 transition-colors"
+                  >
+                    <ImageIcon size={18} />
+                  </button>
+                  {idx >= DEFAULT_CARGO_TYPES.length && (
+                    <button 
+                      onClick={() => handleDeleteCargo(c.id)}
+                      className="p-2 text-blue-900/40 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ backgroundColor: `${c.color}44` }}>
+                  {c.carriageImage ? (
+                    <img src={c.carriageImage} alt="Carriage" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    c.carriageEmoji
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-mono text-blue-900/60 uppercase">{t('settings.carriage_visual')}</p>
+                  <p className="text-xs text-blue-900/40">{t('settings.custom_asset')}</p>
+                </div>
+              </div>
+            </motion.div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'SYSTEM' && (
+        <div className="space-y-12">
+          <div className="sketch-card bg-blue-50/30 border-blue-950/10 mb-8">
+            <p className="text-sm text-blue-900/60 leading-relaxed italic">
+              {t('settings.system_desc')}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Start Position */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.start_icon')}</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {currentSystemAssets.startImage ? (
+                    <img src={currentSystemAssets.startImage} alt="Start" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    currentSystemAssets.startEmoji
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setPickingEmoji('startEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'start')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSketching({ type: 'start', initial: currentSystemAssets.startImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Random Cargo */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.random_cargo_icon')}</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {currentSystemAssets.randomCargoImage ? (
+                    <img src={currentSystemAssets.randomCargoImage} alt="Random Cargo" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    currentSystemAssets.randomCargoEmoji
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setPickingEmoji('randomCargoEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'randomCargo')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSketching({ type: 'randomCargo', initial: currentSystemAssets.randomCargoImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Gate Open */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.gate_open_icon')}</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {currentSystemAssets.gateOpenImage ? (
+                    <img src={currentSystemAssets.gateOpenImage} alt="Gate Open" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    currentSystemAssets.gateOpenEmoji
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setPickingEmoji('gateOpenEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'gateOpen')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSketching({ type: 'gateOpen', initial: currentSystemAssets.gateOpenImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Gate Closed */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.gate_closed_icon')}</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {currentSystemAssets.gateClosedImage ? (
+                    <img src={currentSystemAssets.gateClosedImage} alt="Gate Closed" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    currentSystemAssets.gateClosedEmoji
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setPickingEmoji('gateClosedEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'gateClosed')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSketching({ type: 'gateClosed', initial: currentSystemAssets.gateClosedImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {editingImage && (
+          <CargoImageEditor 
+            image={editingImage.src}
+            onCropComplete={handleCropComplete}
+            onCancel={() => setEditingImage(null)}
+          />
+        )}
+
+        {pickingEmoji && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-2xl sketch-card bg-white border-blue-950 overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-6 border-b border-blue-950/20 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold">{t('settings.select_fallback_emoji')}</h3>
+                  <p className="text-xs text-blue-900/40 font-mono uppercase">Choosing for {tab === 'ENGINES' ? t('settings.engines') : tab === 'WALLS' ? t('settings.walls') : t('settings.cargo')}</p>
+                </div>
+                <button 
+                  onClick={() => setPickingEmoji(null)}
+                  className="p-2 hover:bg-blue-50 rounded-xl transition-colors text-blue-950"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                {EMOJI_LIST.map(group => (
+                  <div key={group.category}>
+                    <h4 className="text-xs font-mono text-blue-900/40 uppercase tracking-widest mb-4">{group.category}</h4>
+                    <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                      {group.emojis.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            if (tab === 'ENGINES') {
+                              setNewEngine(prev => ({ ...prev, emoji }));
+                            } else if (tab === 'WALLS') {
+                              setNewWall(prev => ({ ...prev, emoji }));
+                            } else if (tab === 'SYSTEM') {
+                              if (pickingEmoji === 'startEmoji') setCurrentSystemAssets(prev => ({ ...prev, startEmoji: emoji }));
+                              else if (pickingEmoji === 'gateOpenEmoji') setCurrentSystemAssets(prev => ({ ...prev, gateOpenEmoji: emoji }));
+                              else if (pickingEmoji === 'gateClosedEmoji') setCurrentSystemAssets(prev => ({ ...prev, gateClosedEmoji: emoji }));
+                              else if (pickingEmoji === 'randomCargoEmoji') setCurrentSystemAssets(prev => ({ ...prev, randomCargoEmoji: emoji }));
+                            } else {
+                              setNewCargo(prev => ({
+                                ...prev,
+                                [pickingEmoji === 'cargoEmoji' ? 'cargoEmoji' : 'carriageEmoji']: emoji
+                              }));
+                            }
+                            setPickingEmoji(null);
+                          }}
+                          className="aspect-square flex items-center justify-center text-2xl hover:bg-blue-50 rounded-xl transition-all hover:scale-110 active:scale-95"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};

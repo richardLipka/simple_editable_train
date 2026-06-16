@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Patrick+Hand&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Patrick Hand", "Architects Daughter", cursive;
+  --font-mono: "Architects Daughter", monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-[#fdfaf6] text-blue-950 selection:bg-blue-200 selection:text-blue-900;
+    background-image: 
+      radial-gradient(#e5e7eb 0.5px, transparent 0.5px),
+      linear-gradient(to bottom, #fdfaf6 0%, #f9f7f2 100%);
+    background-size: 20px 20px, 100% 100%;
+  }
+
+  /* Sketchy border effect */
+  .sketch-border {
+    border: 2px solid theme('colors.blue.950');
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  }
+
+  .sketch-button {
+    @apply border-2 border-blue-950 px-4 py-2 transition-all active:translate-y-0.5 active:translate-x-0.5;
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+    box-shadow: 4px 4px 0px theme('colors.blue.950');
+  }
+
+  .sketch-button:hover {
+    @apply bg-blue-50;
+    box-shadow: 2px 2px 0px theme('colors.blue.950');
+    transform: translate(2px, 2px);
+  }
+
+  .sketch-card {
+    @apply bg-white border-2 border-blue-950 p-6;
+    border-radius: 15px 225px 15px 255px/255px 15px 225px 15px;
+    box-shadow: 8px 8px 0px rgba(23, 37, 84, 0.1);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-blue-50 rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-blue-950/20 rounded-full hover:bg-blue-950/40 transition-colors;
+  }
+}
