@@ -5,6 +5,12 @@
       "name": "Default levels",
       "description": "Built-in maps, engines, walls, and cargo types",
       "file": "defaultData.json"
+    },
+    {
+      "id": "generated",
+      "name": "Generated levels",
+      "description": "Simple starter campaign with emoji-only assets",
+      "file": "generatedData.json"
     }
   ]
 }
