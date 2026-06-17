@@ -116,6 +116,7 @@ export interface GameState {
   collectedBonusKeys: string[];
   stepCount: number;
   bumpCount: number;
+  isBumping: boolean;
   comboStreak: number;
   lastPickupAtMs: number;
   starsEarned: number;

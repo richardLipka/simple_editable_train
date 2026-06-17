@@ -120,11 +120,32 @@ export function moveTrain(
 
   if (blockReason) {
     if (options?.softBump) {
+      // Deadlock: every direction blocked → game over even in kids mode.
+      const deadlocked = [
+        { x: head.x, y: head.y - 1 },
+        { x: head.x, y: head.y + 1 },
+        { x: head.x - 1, y: head.y },
+        { x: head.x + 1, y: head.y },
+      ].every((candidate) => resolveBlockReason(candidate, s, map, false) !== null);
+      if (deadlocked) return { ...s, isGameOver: true };
+
+      // Penalise hitting a wall or your own carriages once per collision
+      // (only on the leading edge — holding into the obstacle doesn't drain
+      // points every tick). Edge and gate bumps are not penalised.
+      const isPenaltyBump = blockReason === 'wall' || blockReason === 'tail';
+      const applyPenalty = isPenaltyBump && !s.isBumping;
+      const penaltyPoints = 500;
       return {
         ...s,
         lastTrain: s.train,
         moveProgress: 0,
         bumpCount: s.bumpCount + 1,
+        isBumping: true,
+        score: applyPenalty ? Math.max(0, s.score - penaltyPoints) : s.score,
+        lastPickupAtMs: applyPenalty ? nowMs : s.lastPickupAtMs,
+        lastPickup: applyPenalty
+          ? { points: -penaltyPoints, label: 'bump', x: head.x, y: head.y, comboMultiplier: 1 }
+          : s.lastPickup,
         bumpMessage: blockReason === 'gate' ? 'gate' : undefined,
       };
     }
@@ -194,6 +215,7 @@ export function moveTrain(
     collectedCargoKeys: newCollectedCargoKeys,
     collectedBonusKeys: newCollectedBonusKeys,
     stepCount: s.stepCount + 1,
+    isBumping: false,
     comboStreak,
     lastPickupAtMs,
     lastPickup,
@@ -246,6 +268,7 @@ export function createInitialGameState(map: GameMap, startDir: GameState['direct
     collectedBonusKeys: [],
     stepCount: 0,
     bumpCount: 0,
+    isBumping: false,
     comboStreak: 0,
     lastPickupAtMs: 0,
     starsEarned: 0,

@@ -547,7 +547,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
         {scorePopups.map((popup) => (
           <div
             key={popup.id}
-            className="score-popup-floater absolute pointer-events-none font-black text-yellow-600 text-lg drop-shadow-sm"
+            className={`score-popup-floater absolute pointer-events-none font-black text-lg drop-shadow-sm ${popup.points < 0 ? 'text-red-600' : 'text-yellow-600'}`}
             style={{
               left: popup.x * GRID_SIZE + GRID_SIZE / 2,
               top: popup.y * GRID_SIZE,
@@ -555,7 +555,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
             }}
             onAnimationEnd={() => dismissScorePopup(popup.id)}
           >
-            +{popup.points}
+            {popup.points < 0 ? popup.points : `+${popup.points}`}
             {popup.comboMultiplier > 1 ? ` x${popup.comboMultiplier}` : ''}
           </div>
         ))}
