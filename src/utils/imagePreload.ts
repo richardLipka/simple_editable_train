@@ -4,6 +4,10 @@ export function getImageCache(): Record<string, HTMLImageElement> {
   return globalCache;
 }
 
+export function clearImageCache(): void {
+  for (const key in globalCache) delete globalCache[key];
+}
+
 export async function preloadImages(urls: string[]): Promise<void> {
   const unique = [...new Set(urls.filter(Boolean))];
 

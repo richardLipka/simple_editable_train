@@ -824,7 +824,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (!isDragging || !dragStart || !dragCurrent) {
       setIsDragging(false);
       setDraggedPathIndex(null);
@@ -890,13 +890,12 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
     setIsDragging(false);
     setDragStart(null);
     setDragCurrent(null);
-  };
+  }, [isDragging, dragStart, dragCurrent, shapeTool, selectedTool, selectedCargoId, map, applyTool]);
 
   useEffect(() => {
-    const handleGlobalMouseUp = () => handleMouseUp();
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [isDragging, dragStart, dragCurrent, shapeTool, selectedTool, selectedCargoId]);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseUp]);
 
   return (
     <div className="flex h-full bg-[#fdfaf6] text-blue-950">

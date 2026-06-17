@@ -28,8 +28,8 @@ export function isValidAppConfig(value: unknown): value is AppConfig {
   );
 }
 
-export async function fetchPresetsManifest(): Promise<PresetsManifest> {
-  const res = await fetch(`${DATA_BASE}/presets.json`);
+export async function fetchPresetsManifest(signal?: AbortSignal): Promise<PresetsManifest> {
+  const res = await fetch(`${DATA_BASE}/presets.json`, { signal });
   if (!res.ok) {
     throw new Error(`Failed to load presets manifest (${res.status})`);
   }
@@ -40,9 +40,9 @@ export async function fetchPresetsManifest(): Promise<PresetsManifest> {
   return data as PresetsManifest;
 }
 
-export async function fetchPresetConfig(file: string): Promise<AppConfig> {
+export async function fetchPresetConfig(file: string, signal?: AbortSignal): Promise<AppConfig> {
   const sanitized = file.replace(/^\/+/, '').replace(/\.\./g, '');
-  const res = await fetch(`${DATA_BASE}/${sanitized}`);
+  const res = await fetch(`${DATA_BASE}/${sanitized}`, { signal });
   if (!res.ok) {
     throw new Error(`Failed to load preset (${res.status})`);
   }

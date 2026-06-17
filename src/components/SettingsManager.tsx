@@ -241,11 +241,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   };
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     setPresetsLoading(true);
-    fetchPresetsManifest()
+    fetchPresetsManifest(controller.signal)
       .then((manifest) => {
-        if (cancelled) return;
         setPresets(manifest.presets);
         if (manifest.presets.length > 0) {
           setSelectedPresetId(manifest.presets[0].id);
@@ -253,26 +252,28 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
         setPresetsError(null);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Failed to load presets manifest', err);
         setPresets([]);
         setPresetsError(t('settings.presets_unavailable'));
       })
       .finally(() => {
-        if (!cancelled) setPresetsLoading(false);
+        if (!controller.signal.aborted) setPresetsLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, []);
 
   const handleLoadPreset = async () => {
     const preset = presets.find((p) => p.id === selectedPresetId);
     if (!preset) return;
 
+    const controller = new AbortController();
     setPresetLoading(true);
     try {
-      const config = await fetchPresetConfig(preset.file);
+      const config = await fetchPresetConfig(preset.file, controller.signal);
       onImportConfig(config);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to load preset', err);
       alert(t('settings.preset_load_error'));
     } finally {

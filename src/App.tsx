@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { GameMap, CargoType, BonusType, EngineType, WallType, AppConfig, SystemAssets } from './types';
 import { INITIAL_MAP, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES, DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_SYSTEM_ASSETS } from './constants';
 import { mergeBonusTypes, mergeCargoTypes, normalizeAppConfig, normalizeMap } from './utils/configDefaults';
+import { clearImageCache } from './utils/imagePreload';
 import { Play } from './components/Play';
 import { Editor } from './components/Editor';
 import { SettingsManager } from './components/SettingsManager';
@@ -128,6 +129,7 @@ export default function App() {
   const handleImportConfig = (config: AppConfig) => {
     if (!config || typeof config !== 'object') return;
 
+    clearImageCache();
     const normalized = normalizeAppConfig(config);
     saveMaps(normalized.maps);
     saveEngines(normalized.engines);
