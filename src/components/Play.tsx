@@ -60,6 +60,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
   const assetsReadyRef = useRef(false);
   const showPathRef = useRef(false);
   const resetTimingRef = useRef(true);
+  const needsRedrawRef = useRef(true);
   const kidsModeRef = useRef(kidsMode);
   const levelIndexRef = useRef(levelIndex);
   const imageCache = getImageCache();
@@ -94,10 +95,12 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
 
   useEffect(() => {
     isPausedRef.current = isPaused;
+    needsRedrawRef.current = true;
   }, [isPaused]);
 
   useEffect(() => {
     showPathRef.current = showPath;
+    needsRedrawRef.current = true;
   }, [showPath]);
 
   useEffect(() => {
@@ -107,6 +110,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     preloadImages(collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, bonusTypes)).then(() => {
       if (!cancelled) {
         assetsReadyRef.current = true;
+        needsRedrawRef.current = true;
       }
     });
 
@@ -131,6 +135,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     setIsPaused(false);
     isPausedRef.current = false;
     resetTimingRef.current = true;
+    needsRedrawRef.current = true;
   }, [map]);
 
   useEffect(() => {
@@ -425,8 +430,9 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
 
       const paused = isPausedRef.current || !assetsReadyRef.current;
       const current = stateRef.current;
+      const running = !paused && !!current && !current.isGameOver && !current.isLevelComplete;
 
-      if (!paused && current && !current.isGameOver && !current.isLevelComplete) {
+      if (running && current) {
         let newProgress = current.moveProgress + delta / tickRateRef.current;
         let next = current;
 
@@ -457,7 +463,15 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
         }
       }
 
-      drawFrame();
+      // Redraw every frame while the train is animating; otherwise only when
+      // something visually changed (reset, pause/showPath toggle, assets
+      // loaded, game over/complete). Avoids a full canvas redraw at 60fps
+      // while paused or sitting on an end-of-round overlay.
+      if (running || needsRedrawRef.current) {
+        drawFrame();
+        needsRedrawRef.current = false;
+      }
+
       frameId = requestAnimationFrame(loop);
     };
 

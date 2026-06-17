@@ -78,6 +78,10 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
   const [hoveredTurnIndex, setHoveredTurnIndex] = useState<number | null>(null);
   const lastClickTime = useRef<number>(0);
   const lastClickPos = useRef<{ x: number, y: number } | null>(null);
+  // Last grid cell processed during a drag, so we can skip mousemoves that
+  // stay within the same cell (each processed move triggers a full Editor
+  // re-render + canvas redraw).
+  const lastDragCellRef = useRef<{ x: number, y: number } | null>(null);
 
   const simplifyPath = useCallback((path: {x: number, y: number}[]) => {
     const simplified = [];
@@ -671,6 +675,8 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
     const pos = getGridPos(e);
     if (!pos) return;
 
+    lastDragCellRef.current = pos;
+
     const now = Date.now();
     const isDoubleClick = now - lastClickTime.current < 300 && 
                          lastClickPos.current?.x === pos.x && 
@@ -796,6 +802,17 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
     }
 
     if (isDragging) {
+      // Skip moves that stay in the same grid cell — nothing changes at cell
+      // granularity, so this avoids a full re-render + redraw per pixel.
+      if (
+        lastDragCellRef.current &&
+        lastDragCellRef.current.x === pos.x &&
+        lastDragCellRef.current.y === pos.y
+      ) {
+        return;
+      }
+      lastDragCellRef.current = pos;
+
       setDragCurrent(pos);
 
       if (draggedPathIndex !== null && map.generatedPath) {
@@ -825,6 +842,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
   };
 
   const handleMouseUp = useCallback(() => {
+    lastDragCellRef.current = null;
     if (!isDragging || !dragStart || !dragCurrent) {
       setIsDragging(false);
       setDraggedPathIndex(null);
