@@ -62,6 +62,7 @@ export interface GameMap {
   selectedEngineId: string;
   generatedPath?: { x: number; y: number }[];
   pathAnchors?: { x: number; y: number }[];
+  carObstacles?: CarObstacleDef[];
 }
 
 export interface SystemAssets {
@@ -73,6 +74,12 @@ export interface SystemAssets {
   gateClosedImage?: string;
   randomCargoEmoji: string;
   randomCargoImage?: string;
+  carObstacleEmoji?: string;
+  carObstacleImage?: string;
+  roadMidEmoji?: string;
+  roadMidImage?: string;
+  roadEdgeEmoji?: string;
+  roadEdgeImage?: string;
 }
 
 export interface AppConfig {
@@ -83,6 +90,20 @@ export interface AppConfig {
   cargoTypes: CargoType[];
   bonusTypes?: BonusType[];
   systemAssets: SystemAssets;
+}
+
+export interface CarObstacleDef {
+  id: string;
+  startPos: { x: number; y: number };
+  endPos: { x: number; y: number };
+}
+
+export interface CarObstacleState {
+  id: string;
+  pathIndex: number;
+  prevPathIndex: number;
+  direction: 1 | -1;
+  phase: 0 | 1; // 0 = move this tick, 1 = hold (half-speed)
 }
 
 export interface PickupFeedback {
@@ -121,6 +142,7 @@ export interface GameState {
   lastPickupAtMs: number;
   starsEarned: number;
   finishBonus: number;
+  carObstacleStates?: CarObstacleState[];
   bumpMessage?: 'gate';
   lastPickup?: PickupFeedback;
 }

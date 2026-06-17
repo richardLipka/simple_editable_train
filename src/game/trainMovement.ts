@@ -1,4 +1,4 @@
-import { BonusType, CargoType, GameMap, GameState } from '../types';
+import { BonusType, CargoType, CarObstacleDef, CarObstacleState, GameMap, GameState } from '../types';
 import { DEFAULT_BONUS_TYPES, DEFAULT_CARGO_TYPES } from '../constants';
 import {
   applyComboScore,
@@ -12,6 +12,54 @@ import {
   resolveBonusTypes,
   resolveCargoTypes,
 } from './scoring';
+
+export function computeCarPath(def: CarObstacleDef): { x: number; y: number }[] {
+  const path: { x: number; y: number }[] = [];
+  if (def.startPos.x === def.endPos.x) {
+    const step = def.startPos.y <= def.endPos.y ? 1 : -1;
+    for (let y = def.startPos.y; y !== def.endPos.y + step; y += step)
+      path.push({ x: def.startPos.x, y });
+  } else {
+    const step = def.startPos.x <= def.endPos.x ? 1 : -1;
+    for (let x = def.startPos.x; x !== def.endPos.x + step; x += step)
+      path.push({ x, y: def.startPos.y });
+  }
+  return path;
+}
+
+function stepCarState(cs: CarObstacleState, pathLength: number): CarObstacleState {
+  const nextPhase = (1 - (cs.phase ?? 0)) as 0 | 1;
+  if (pathLength <= 1 || cs.phase === 1) {
+    // Hold tick: stay at current cell, flip phase so next tick the car moves.
+    return { ...cs, prevPathIndex: cs.pathIndex, phase: nextPhase };
+  }
+  let nextIndex = cs.pathIndex + cs.direction;
+  let nextDir = cs.direction;
+  if (nextIndex >= pathLength) { nextIndex = pathLength - 2; nextDir = -1; }
+  else if (nextIndex < 0) { nextIndex = 1; nextDir = 1; }
+  return { ...cs, prevPathIndex: cs.pathIndex, pathIndex: nextIndex, direction: nextDir, phase: nextPhase };
+}
+
+function moveAndCheckCars(
+  trainPositions: { x: number; y: number }[],
+  currentCarStates: CarObstacleState[],
+  carDefs: CarObstacleDef[],
+): { carStates: CarObstacleState[]; carHit: boolean } {
+  if (carDefs.length === 0) return { carStates: currentCarStates, carHit: false };
+  const newCarStates = currentCarStates.map((cs) => {
+    const def = carDefs.find((d) => d.id === cs.id);
+    if (!def) return cs;
+    return stepCarState(cs, computeCarPath(def).length);
+  });
+  const trainPosSet = new Set(trainPositions.map((p) => `${p.x},${p.y}`));
+  const carHit = newCarStates.some((cs) => {
+    const def = carDefs.find((d) => d.id === cs.id);
+    if (!def) return false;
+    const pos = computeCarPath(def)[cs.pathIndex];
+    return pos ? trainPosSet.has(`${pos.x},${pos.y}`) : false;
+  });
+  return { carStates: newCarStates, carHit };
+}
 
 /** Body segments that block the head — excludes head; tail excluded when not growing. */
 export function getBlockingBodySegments(train: { x: number; y: number }[], willGrow: boolean) {
@@ -129,6 +177,12 @@ export function moveTrain(
       ].every((candidate) => resolveBlockReason(candidate, s, map, false) !== null);
       if (deadlocked) return { ...s, isGameOver: true };
 
+      // Cars still move while train is blocked; if one reaches the train → game over.
+      const { carStates: bumpCarStates, carHit: bumpCarHit } = moveAndCheckCars(
+        s.train, s.carObstacleStates ?? [], map.carObstacles ?? [],
+      );
+      if (bumpCarHit) return { ...s, carObstacleStates: bumpCarStates, isGameOver: true };
+
       // Penalise hitting a wall or your own carriages once per collision
       // (only on the leading edge — holding into the obstacle doesn't drain
       // points every tick). Edge and gate bumps are not penalised.
@@ -141,6 +195,7 @@ export function moveTrain(
         moveProgress: 0,
         bumpCount: s.bumpCount + 1,
         isBumping: true,
+        carObstacleStates: bumpCarStates,
         score: applyPenalty ? Math.max(0, s.score - penaltyPoints) : s.score,
         lastPickupAtMs: applyPenalty ? nowMs : s.lastPickupAtMs,
         lastPickup: applyPenalty
@@ -222,11 +277,19 @@ export function moveTrain(
     bumpMessage: undefined,
   };
 
-  if (cell === 'GATE' && nextState.collectedCount === nextState.totalCargoCount) {
-    return completeLevel(nextState, kidsMode, nowMs);
+  // Move cars and check collision with the newly positioned train.
+  const { carStates: newCarStates, carHit } = moveAndCheckCars(
+    nextState.train, nextState.carObstacleStates ?? [], map.carObstacles ?? [],
+  );
+  if (carHit) return { ...nextState, carObstacleStates: newCarStates, isGameOver: true };
+
+  const resolvedState = { ...nextState, carObstacleStates: newCarStates };
+
+  if (cell === 'GATE' && resolvedState.collectedCount === resolvedState.totalCargoCount) {
+    return completeLevel(resolvedState, kidsMode, nowMs);
   }
 
-  return nextState;
+  return resolvedState;
 }
 
 /** Previous grid position for animating train segment i. */
@@ -269,6 +332,13 @@ export function createInitialGameState(map: GameMap, startDir: GameState['direct
     stepCount: 0,
     bumpCount: 0,
     isBumping: false,
+    carObstacleStates: (map.carObstacles ?? []).map((def) => ({
+      id: def.id,
+      pathIndex: 0,
+      prevPathIndex: 0,
+      direction: 1 as const,
+      phase: 0 as const,
+    })),
     comboStreak: 0,
     lastPickupAtMs: 0,
     starsEarned: 0,
