@@ -28,6 +28,10 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
+  // Base-layer snapshot captured once when a shape drag begins, so the
+  // rubber-band preview can repaint synchronously without re-decoding the
+  // canvas from a data URL on every mousemove.
+  const shapeBaseRef = useRef<ImageData | null>(null);
 
   const COLORS = [
     '#172554', '#000000', '#ef4444', '#22c55e', '#eab308', '#f97316', '#a855f7', '#78350f', '#ffffff'
@@ -256,6 +260,12 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       if (!ctx) return;
       floodFill(ctx, pos.x, pos.y, color);
       saveToHistory();
+    } else if (tool === 'RECT' || tool === 'CIRCLE' || tool === 'LINE') {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      shapeBaseRef.current = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     }
   };
 
@@ -284,59 +294,56 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       }
       setStartPos(currentPos);
     } else {
-      // For shapes, we need to clear and redraw from the last history state
-      const img = new Image();
-      img.src = history[history.length - 1];
-      img.onload = () => {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        
-        ctx.strokeStyle = color;
-        ctx.fillStyle = getFillPattern(ctx, fillTexture, fillColor);
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = 'round';
+      // For shapes, repaint the base-layer snapshot synchronously (captured
+      // at drag start) and draw the live preview on top. No per-move Image
+      // allocation or async decode, so previews can't paint out of order.
+      if (!shapeBaseRef.current) return;
+      ctx.putImageData(shapeBaseRef.current, 0, 0);
 
-        if (tool === 'RECT') {
-          const w = currentPos.x - startPos.x;
-          const h = currentPos.y - startPos.y;
-          
-          // Draw fill first
-          if (fillColor !== 'transparent') {
-            ctx.fillRect(startPos.x, startPos.y, w, h);
-          }
+      ctx.strokeStyle = color;
+      ctx.fillStyle = getFillPattern(ctx, fillTexture, fillColor);
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
 
-          // Draw sketchy rectangle
-          drawSketchyLine(ctx, startPos.x, startPos.y, startPos.x + w, startPos.y, brushSize);
-          drawSketchyLine(ctx, startPos.x + w, startPos.y, startPos.x + w, startPos.y + h, brushSize);
-          drawSketchyLine(ctx, startPos.x + w, startPos.y + h, startPos.x, startPos.y + h, brushSize);
-          drawSketchyLine(ctx, startPos.x, startPos.y + h, startPos.x, startPos.y, brushSize);
-        } else if (tool === 'CIRCLE') {
-          const r = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2));
-          
-          // Draw fill
-          if (fillColor !== 'transparent') {
-            ctx.beginPath();
-            ctx.arc(startPos.x, startPos.y, r, 0, Math.PI * 2);
-            ctx.fill();
-          }
+      if (tool === 'RECT') {
+        const w = currentPos.x - startPos.x;
+        const h = currentPos.y - startPos.y;
 
-          ctx.beginPath();
-          // Sketchy circle is harder, let's just do a jittery arc
-          for (let i = 0; i < 360; i += 5) {
-            const angle = (i * Math.PI) / 180;
-            const jitter = (Math.random() - 0.5) * (brushSize * 0.5);
-            const x = startPos.x + (r + jitter) * Math.cos(angle);
-            const y = startPos.y + (r + jitter) * Math.sin(angle);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.closePath();
-          ctx.stroke();
-        } else if (tool === 'LINE') {
-          drawSketchyLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize);
+        // Draw fill first
+        if (fillColor !== 'transparent') {
+          ctx.fillRect(startPos.x, startPos.y, w, h);
         }
-      };
+
+        // Draw sketchy rectangle
+        drawSketchyLine(ctx, startPos.x, startPos.y, startPos.x + w, startPos.y, brushSize);
+        drawSketchyLine(ctx, startPos.x + w, startPos.y, startPos.x + w, startPos.y + h, brushSize);
+        drawSketchyLine(ctx, startPos.x + w, startPos.y + h, startPos.x, startPos.y + h, brushSize);
+        drawSketchyLine(ctx, startPos.x, startPos.y + h, startPos.x, startPos.y, brushSize);
+      } else if (tool === 'CIRCLE') {
+        const r = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2));
+
+        // Draw fill
+        if (fillColor !== 'transparent') {
+          ctx.beginPath();
+          ctx.arc(startPos.x, startPos.y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        // Sketchy circle is harder, let's just do a jittery arc
+        for (let i = 0; i < 360; i += 5) {
+          const angle = (i * Math.PI) / 180;
+          const jitter = (Math.random() - 0.5) * (brushSize * 0.5);
+          const x = startPos.x + (r + jitter) * Math.cos(angle);
+          const y = startPos.y + (r + jitter) * Math.sin(angle);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      } else if (tool === 'LINE') {
+        drawSketchyLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize);
+      }
     }
   };
 
