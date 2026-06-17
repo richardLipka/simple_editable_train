@@ -3,8 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameMap, GameState, Direction, CargoType, CargoConfig, BonusConfig, BonusType, EngineType, WallType, SystemAssets, ScorePopup } from '../types';
 import { GRID_SIZE, TICK_RATE } from '../constants';
-import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Download, Gauge, Eye, EyeOff, Star } from 'lucide-react';
-import { generateOpenSCAD } from '../services/openscadService';
+import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Gauge, Eye, EyeOff, Star } from 'lucide-react';
 import { createInitialGameState, getSegmentOrigin, moveTrain } from '../game/trainMovement';
 import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
@@ -479,22 +478,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
         </div>
 
         <div className="flex gap-2">
-          <button 
-            onClick={() => {
-              const code = generateOpenSCAD('Train', '🚂');
-              const blob = new Blob([code], { type: 'text/plain' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'train_carriage.scad';
-              a.click();
-            }}
-            className="p-2 rounded-lg bg-white border border-blue-950 text-blue-950 hover:bg-blue-50 transition-colors"
-            title={t('play.export_scad')}
-          >
-            <Download size={20} />
-          </button>
-          <button 
+          <button
             onClick={() => setIsPaused(!isPaused)}
             className="p-2 rounded-lg bg-white border border-blue-950 text-blue-950 hover:bg-blue-50 transition-colors"
           >

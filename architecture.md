@@ -35,9 +35,6 @@ A client-side logic game where the player steers a train on a grid, collects car
 Supporting UI (modal overlays):
   SketchPad ──► custom asset drawing (base64 PNG)
   CargoImageEditor ──► image upload crop (react-easy-crop)
-
-Service:
-  openscadService ──► parametric 3D carriage export (.scad)
 ```
 
 The application uses **mode-based view switching** inside `App.tsx` rather than a routing library. Five modes exist: `MENU`, `PLAY`, `EDITOR`, `CARGO_CONFIG`, and `SETTINGS`.
@@ -70,7 +67,6 @@ Vlak/
     │   ├── SketchPad.tsx   # In-app drawing tool for custom images
     │   └── CargoImageEditor.tsx # Image crop modal
     └── services/
-        └── openscadService.ts   # OpenSCAD code generation
 ```
 
 ## Core Domain Model (`src/types.ts`)
@@ -146,8 +142,6 @@ On first launch, if no saved maps exist, the app seeds a single level from `INIT
 
 **Rendering:** HTML5 Canvas at `GRID_SIZE` (60px) per cell. Supports emoji fallbacks and cached custom images. Train segments rotate by movement direction. Optional `generatedPath` overlay for hints.
 
-**Export:** Downloads a parametric OpenSCAD carriage model via `generateOpenSCAD()`.
-
 ### Editor (`src/components/Editor.tsx`)
 
 **Manual tools:**
@@ -188,12 +182,6 @@ Asset input methods:
 - Hand-draw (`SketchPad`) → saved as base64 PNG
 
 Built-in defaults (coal, wood, gold, food, oil, etc.) cannot be deleted; custom entries can.
-
-## Services
-
-### `openscadService.ts`
-
-Generates OpenSCAD source for a parametric 3D-printable train carriage (Makerworld/Bambu Lab Customizer compatible). Called from the Play view export button. Output is a downloadable `.scad` text file — no server processing.
 
 ## Internationalization
 
@@ -238,18 +226,6 @@ npm run lint     # TypeScript check (tsc --noEmit)
 - `@/` path alias to project root
 - HMR can be disabled via `DISABLE_HMR=true`
 
-## Dependencies vs. Actual Usage
-
-Several `package.json` dependencies are listed but **not referenced in `src/`**:
-
-| Package | Status |
-|---------|--------|
-| `express`, `better-sqlite3` | Not used — no backend |
-| `dotenv` | Not used in current `src/` code |
-| `clsx`, `tailwind-merge` | Not used in current components |
-
-The application is fully functional as a static SPA without these.
-
 ## Key Constants (`src/constants.ts`)
 
 | Constant | Value | Usage |
@@ -281,7 +257,7 @@ App.tsx state update (+ localStorage save)
 Likely places for future work:
 
 1. **Load `defaultData.json` on first run** — replace hardcoded `INITIAL_MAP` seed
-2. **Backend / API** — `express` + `better-sqlite3` are already in dependencies
+2. **Backend / API** — none exists today; would need a server framework and a database added as dependencies
 3. **React Router** — if URL-based navigation is needed beyond mode switching
 4. **Shared canvas utilities** — Play and Editor duplicate grid rendering logic
 5. **Game logic tests** — expand coverage in `src/game/trainMovement.ts`

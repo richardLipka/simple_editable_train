@@ -11,7 +11,6 @@ Default UI language is Czech (`cs`); English (`en`) is also supported.
 - **Custom assets** — emoji fallbacks, image upload/crop, or hand-drawn wagon and wall art
 - **Configurable cargo types** — engines, walls, cargo, and system icons
 - **Import / export** — back up or share full game configuration as JSON
-- **OpenSCAD export** — download a parametric 3D carriage model from the play screen
 
 ## Quick start
 

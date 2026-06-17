@@ -25,7 +25,6 @@
     "speed": "SPEED",
     "final_score": "Final score",
     "finish_bonus": "finish bonus",
-    "export_scad": "Export OpenSCAD Model",
     "exit": "EXIT",
     "crashed": "CRASHED!",
     "destroyed": "The train was destroyed.",
