@@ -1,19 +1,20 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameMap, CellType, Direction, CargoType, CargoConfig, BonusType, BonusConfig, EngineType, WallType, SystemAssets } from '../types';
+import { GameMap, CellType, Direction, CargoType, CargoConfig, BonusType, BonusConfig, EngineType, WallType, SystemAssets, CarObstacleDef } from '../types';
+import { computeCarPath } from '../game/trainMovement';
 import { GRID_SIZE } from '../constants';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
 import { createGridBackground } from '../utils/canvasBackground';
 import { getImageCache, preloadImages } from '../utils/imagePreload';
-import { 
-  Save, Trash2, Plus, ArrowLeft, Package, Square, LogOut, Play, 
-  Settings, MousePointer2, Box, Circle, Triangle, Eraser, BrickWall,
-  Wand2, Eye, EyeOff, Settings2, Route, Layout, Sparkles
+import {
+  Save, Trash2, ArrowLeft, Package, LogOut, Play,
+  MousePointer2, Box, Circle, Triangle, Eraser, BrickWall,
+  Wand2, Eye, EyeOff, Route, Layout, Sparkles, Car
 } from 'lucide-react';
 
 type ShapeTool = 'POINT' | 'RECT' | 'TRI' | 'CIRC';
-type EditorTool = CellType | 'PATH';
+type EditorTool = CellType | 'PATH' | 'CAR';
 
 interface EditorProps {
   map: GameMap;
@@ -44,11 +45,11 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPathIndex, setDraggedPathIndex] = useState<number | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [pendingCarStart, setPendingCarStart] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (selectedTool === 'PATH') {
-      setShowPath(true);
-    }
+    if (selectedTool === 'PATH') setShowPath(true);
+    setPendingCarStart(null);
   }, [selectedTool]);
 
   const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
@@ -507,6 +508,84 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
       }
     }
 
+    // Draw car obstacle roads (before markers so markers sit on top)
+    for (const car of (map.carObstacles ?? [])) {
+      const path = computeCarPath(car);
+      if (path.length < 2) continue;
+      const isH = car.startPos.y === car.endPos.y;
+      const edgeImg = systemAssets.roadEdgeImage && imageCache[systemAssets.roadEdgeImage]?.complete
+        ? imageCache[systemAssets.roadEdgeImage] : null;
+      const midImg = systemAssets.roadMidImage && imageCache[systemAssets.roadMidImage]?.complete
+        ? imageCache[systemAssets.roadMidImage] : null;
+
+      for (let i = 0; i < path.length; i++) {
+        const p = path[i];
+        const px = p.x * GRID_SIZE;
+        const py = p.y * GRID_SIZE;
+        const isEdge = i === 0 || i === path.length - 1;
+        const img = isEdge ? edgeImg : midImg;
+
+        let angle = 0;
+        if (isEdge) {
+          if (isH) angle = i === 0 ? Math.PI : 0;
+          else angle = i === 0 ? -Math.PI / 2 : Math.PI / 2;
+        } else if (!isH) {
+          angle = Math.PI / 2;
+        }
+        ctx.save();
+        ctx.translate(px + GRID_SIZE / 2, py + GRID_SIZE / 2);
+        ctx.rotate(angle);
+        if (img) {
+          ctx.drawImage(img, -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        } else {
+          const emoji = isEdge ? (systemAssets.roadEdgeEmoji ?? '🛣️') : (systemAssets.roadMidEmoji ?? '🛣️');
+          ctx.font = '32px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(emoji, 0, 0);
+        }
+        ctx.restore();
+      }
+
+      // Car silhouette at start position
+      const sp = car.startPos;
+      const carImg = systemAssets.carObstacleImage && imageCache[systemAssets.carObstacleImage]?.complete
+        ? imageCache[systemAssets.carObstacleImage] : null;
+      ctx.save();
+      ctx.translate(sp.x * GRID_SIZE + GRID_SIZE / 2, sp.y * GRID_SIZE + GRID_SIZE / 2);
+      if (!isH) ctx.rotate(Math.PI / 2);
+      if (carImg) {
+        ctx.drawImage(carImg, -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+      } else {
+        ctx.font = '40px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(systemAssets.carObstacleEmoji ?? '🚗', 0, 0);
+      }
+      ctx.restore();
+
+      // End-point marker
+      const ep = car.endPos;
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ep.x * GRID_SIZE + GRID_SIZE / 2, ep.y * GRID_SIZE + GRID_SIZE / 2, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Pending car-start highlight
+    if (pendingCarStart) {
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.35)';
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.fillRect(pendingCarStart.x * GRID_SIZE, pendingCarStart.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+      ctx.strokeRect(pendingCarStart.x * GRID_SIZE, pendingCarStart.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+      ctx.setLineDash([]);
+    }
+
     // Draw Preview
     if (isDragging && dragStart && dragCurrent) {
       ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
@@ -565,7 +644,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
         }
       }
     }
-  }, [map, wallById, cargoById, bonusById, bonusTypes, selectedEngine, gridBackground, isDragging, dragStart, dragCurrent, shapeTool, showPath, systemAssets]);
+  }, [map, wallById, cargoById, bonusById, bonusTypes, selectedEngine, gridBackground, isDragging, dragStart, dragCurrent, shapeTool, showPath, systemAssets, pendingCarStart]);
 
   useEffect(() => {
     draw();
@@ -684,6 +763,22 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
     lastClickTime.current = now;
     lastClickPos.current = pos;
 
+    // Two-click placement for car obstacles
+    if (selectedTool === 'CAR') {
+      if (!pendingCarStart) {
+        setPendingCarStart(pos);
+      } else {
+        const sameAxis = pos.x === pendingCarStart.x || pos.y === pendingCarStart.y;
+        const notSameCell = pos.x !== pendingCarStart.x || pos.y !== pendingCarStart.y;
+        if (sameAxis && notSameCell) {
+          const newCar: CarObstacleDef = { id: `car_${Date.now()}`, startPos: pendingCarStart, endPos: pos };
+          setMap(prev => ({ ...prev, carObstacles: [...(prev.carObstacles ?? []), newCar] }));
+        }
+        setPendingCarStart(null);
+      }
+      return;
+    }
+
     if (selectedTool === 'PATH' && map.generatedPath) {
       const turns = getTurns(map.generatedPath);
       const clickedTurn = turns.find(t => t.x === pos.x && t.y === pos.y);
@@ -784,7 +879,18 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
       const newWallConfigs = { ...map.wallConfigs };
       applyTool(pos.x, pos.y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
       if (selectedTool !== 'PATH') {
-        setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, bonusConfigs: newBonusConfigs, wallConfigs: newWallConfigs }));
+        setMap(prev => ({
+          ...prev,
+          grid: newGrid,
+          cargoConfigs: newConfigs,
+          bonusConfigs: newBonusConfigs,
+          wallConfigs: newWallConfigs,
+          ...(selectedTool === 'EMPTY' && {
+            carObstacles: (prev.carObstacles ?? []).filter(
+              (car) => !computeCarPath(car).some((p) => p.x === pos.x && p.y === pos.y),
+            ),
+          }),
+        }));
       }
     }
   };
@@ -835,7 +941,18 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
         const newWallConfigs = { ...map.wallConfigs };
         applyTool(pos.x, pos.y, newGrid, newConfigs, newBonusConfigs, newWallConfigs);
         if (selectedTool !== 'PATH') {
-          setMap(prev => ({ ...prev, grid: newGrid, cargoConfigs: newConfigs, bonusConfigs: newBonusConfigs, wallConfigs: newWallConfigs }));
+          setMap(prev => ({
+            ...prev,
+            grid: newGrid,
+            cargoConfigs: newConfigs,
+            bonusConfigs: newBonusConfigs,
+            wallConfigs: newWallConfigs,
+            ...(selectedTool === 'EMPTY' && {
+              carObstacles: (prev.carObstacles ?? []).filter(
+                (car) => !computeCarPath(car).some((p) => p.x === pos.x && p.y === pos.y),
+              ),
+            }),
+          }));
         }
       }
     }
@@ -1077,6 +1194,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
               { id: 'BONUS', icon: <Sparkles size={18} />, label: t('editor.bonus') },
               { id: 'START', icon: <Play size={18} />, label: t('editor.start') },
               { id: 'PATH', icon: <Route size={18} />, label: t('editor.path') },
+              { id: 'CAR', icon: <Car size={18} />, label: 'Car' },
             ].map(tool => (
               <button
                 key={tool.id}
@@ -1210,6 +1328,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
                     cargoConfigs: {},
                     bonusConfigs: {},
                     wallConfigs: {},
+                    carObstacles: [],
                     generatedPath: [],
                     pathAnchors: []
                   }));

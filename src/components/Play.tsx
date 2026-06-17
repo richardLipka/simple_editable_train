@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { GameMap, GameState, Direction, CargoType, CargoConfig, BonusConfig, BonusType, EngineType, WallType, SystemAssets, ScorePopup } from '../types';
 import { GRID_SIZE, TICK_RATE, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES } from '../constants';
 import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Gauge, Eye, EyeOff, Star } from 'lucide-react';
-import { createInitialGameState, getSegmentOrigin, moveTrain } from '../game/trainMovement';
+import { createInitialGameState, computeCarPath, getSegmentOrigin, moveTrain } from '../game/trainMovement';
 import { resolveCargoTypes, resolveBonusTypes } from '../game/scoring';
 import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
@@ -258,6 +258,46 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
 
       layerCtx.drawImage(gridBackground, 0, 0);
 
+      // Roads are static — draw before walls so walls overdraw if overlapping.
+      for (const car of (map.carObstacles ?? [])) {
+        const path = computeCarPath(car);
+        const isH = car.startPos.y === car.endPos.y;
+        const edgeImg = systemAssets.roadEdgeImage && imageCache[systemAssets.roadEdgeImage]?.complete
+          ? imageCache[systemAssets.roadEdgeImage] : null;
+        const midImg = systemAssets.roadMidImage && imageCache[systemAssets.roadMidImage]?.complete
+          ? imageCache[systemAssets.roadMidImage] : null;
+
+        for (let i = 0; i < path.length; i++) {
+          const p = path[i];
+          const px = p.x * GRID_SIZE;
+          const py = p.y * GRID_SIZE;
+          const isEdge = i === 0 || i === path.length - 1;
+          const img = isEdge ? edgeImg : midImg;
+
+          // Edge convention: image designed horizontal, cap on the right.
+          let angle = 0;
+          if (isEdge) {
+            if (isH) angle = i === 0 ? Math.PI : 0;
+            else angle = i === 0 ? -Math.PI / 2 : Math.PI / 2;
+          } else if (!isH) {
+            angle = Math.PI / 2;
+          }
+          layerCtx.save();
+          layerCtx.translate(px + GRID_SIZE / 2, py + GRID_SIZE / 2);
+          layerCtx.rotate(angle);
+          if (img) {
+            layerCtx.drawImage(img, -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+          } else {
+            const emoji = isEdge ? (systemAssets.roadEdgeEmoji ?? '🛣️') : (systemAssets.roadMidEmoji ?? '🛣️');
+            layerCtx.font = '32px serif';
+            layerCtx.textAlign = 'center';
+            layerCtx.textBaseline = 'middle';
+            layerCtx.fillText(emoji, 0, 0);
+          }
+          layerCtx.restore();
+        }
+      }
+
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
           const cell = map.grid[y][x];
@@ -295,7 +335,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
       if (!gameState) return;
 
       const gateOpen = gameState.collectedCount === gameState.totalCargoCount;
-      if (!staticLayer || staticLayerGateOpen !== gateOpen) {
+      if (!staticLayer || staticLayerGateOpen !== gateOpen || needsRedrawRef.current) {
         staticLayer = buildStaticLayer(gateOpen);
         staticLayerGateOpen = gateOpen;
       }
@@ -356,6 +396,35 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
       }
 
       const renderProgress = Math.min(gameState.moveProgress, 1);
+
+      // Draw moving car obstacles (behind train so train overlaps on collision).
+      for (const carDef of (map.carObstacles ?? [])) {
+        const cs = (gameState.carObstacleStates ?? []).find((c) => c.id === carDef.id);
+        if (!cs) continue;
+        const path = computeCarPath(carDef);
+        const isH = carDef.startPos.y === carDef.endPos.y;
+        const prev = path[cs.prevPathIndex] ?? path[cs.pathIndex];
+        const curr = path[cs.pathIndex];
+        const carX = (prev.x + (curr.x - prev.x) * renderProgress) * GRID_SIZE + GRID_SIZE / 2;
+        const carY = (prev.y + (curr.y - prev.y) * renderProgress) * GRID_SIZE + GRID_SIZE / 2;
+
+        const carImg = systemAssets.carObstacleImage && imageCache[systemAssets.carObstacleImage]?.complete
+          ? imageCache[systemAssets.carObstacleImage] : null;
+
+        ctx.save();
+        ctx.translate(carX, carY);
+        if (!isH) ctx.rotate(Math.PI / 2);
+        if (carImg) {
+          ctx.drawImage(carImg, -GRID_SIZE / 2, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        } else {
+          ctx.font = '40px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(systemAssets.carObstacleEmoji ?? '🚗', 0, 0);
+        }
+        ctx.restore();
+      }
+
       for (let i = gameState.train.length - 1; i >= 0; i--) {
         const p = gameState.train[i];
         const lastP = getSegmentOrigin(gameState.train, gameState.lastTrain, i);
