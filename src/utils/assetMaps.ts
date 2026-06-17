@@ -23,5 +23,8 @@ export function collectGameAssetUrls(
     systemAssets.gateOpenImage,
     systemAssets.gateClosedImage,
     systemAssets.randomCargoImage,
+    systemAssets.carObstacleImage,
+    systemAssets.roadMidImage,
+    systemAssets.roadEdgeImage,
   ].filter(Boolean) as string[];
 }

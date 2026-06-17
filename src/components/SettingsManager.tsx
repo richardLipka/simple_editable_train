@@ -50,14 +50,14 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingImage, setEditingImage] = useState<{
-    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
+    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo' | 'carObstacle' | 'roadMid' | 'roadEdge';
     src: string;
   } | null>(null);
   const [sketching, setSketching] = useState<{
-    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo';
+    type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo' | 'carObstacle' | 'roadMid' | 'roadEdge';
     initial?: string;
   } | null>(null);
-  const [pickingEmoji, setPickingEmoji] = useState<'emoji' | 'cargoEmoji' | 'carriageEmoji' | 'startEmoji' | 'gateOpenEmoji' | 'gateClosedEmoji' | 'randomCargoEmoji' | null>(null);
+  const [pickingEmoji, setPickingEmoji] = useState<'emoji' | 'cargoEmoji' | 'carriageEmoji' | 'startEmoji' | 'gateOpenEmoji' | 'gateClosedEmoji' | 'randomCargoEmoji' | 'carObstacleEmoji' | 'roadMidEmoji' | 'roadEdgeEmoji' | null>(null);
 
   const [presets, setPresets] = useState<PresetEntry[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState('');
@@ -65,7 +65,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   const [presetLoading, setPresetLoading] = useState(false);
   const [presetsError, setPresetsError] = useState<string | null>(null);
 
-  const [currentSystemAssets, setCurrentSystemAssets] = useState<SystemAssets>(systemAssets);
+  // System assets are sourced directly from the App-level prop (the single
+  // source of truth, persisted to localStorage). Every edit flushes through
+  // this helper immediately, so drawn/uploaded images show up in the level
+  // editor and game without needing a separate "save" step.
+  const updateSystemAssets = (patch: Partial<SystemAssets>) => {
+    onSaveSystemAssets({ ...systemAssets, ...patch });
+  };
 
   const [newEngine, setNewEngine] = useState<Partial<EngineType>>({
     id: '',
@@ -96,7 +102,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     pointValue: 50,
   });
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo') => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'engine' | 'wall' | 'cargo' | 'carriage' | 'bonus' | 'start' | 'gateOpen' | 'gateClosed' | 'randomCargo' | 'carObstacle' | 'roadMid' | 'roadEdge') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -122,13 +128,19 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
       } else if (editingImage.type === 'bonus') {
         setNewBonus(prev => ({ ...prev, image: croppedImage }));
       } else if (editingImage.type === 'start') {
-        setCurrentSystemAssets(prev => ({ ...prev, startImage: croppedImage }));
+        updateSystemAssets({ startImage: croppedImage });
       } else if (editingImage.type === 'gateOpen') {
-        setCurrentSystemAssets(prev => ({ ...prev, gateOpenImage: croppedImage }));
+        updateSystemAssets({ gateOpenImage: croppedImage });
       } else if (editingImage.type === 'gateClosed') {
-        setCurrentSystemAssets(prev => ({ ...prev, gateClosedImage: croppedImage }));
+        updateSystemAssets({ gateClosedImage: croppedImage });
       } else if (editingImage.type === 'randomCargo') {
-        setCurrentSystemAssets(prev => ({ ...prev, randomCargoImage: croppedImage }));
+        updateSystemAssets({ randomCargoImage: croppedImage });
+      } else if (editingImage.type === 'carObstacle') {
+        updateSystemAssets({ carObstacleImage: croppedImage });
+      } else if (editingImage.type === 'roadMid') {
+        updateSystemAssets({ roadMidImage: croppedImage });
+      } else if (editingImage.type === 'roadEdge') {
+        updateSystemAssets({ roadEdgeImage: croppedImage });
       }
       setEditingImage(null);
     }
@@ -237,7 +249,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   };
 
   const handleSaveSystem = () => {
-    onSaveSystemAssets(currentSystemAssets);
+    // System assets persist immediately on each edit; nothing to flush here.
   };
 
   useEffect(() => {
@@ -321,10 +333,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
             if (sketching.type === 'cargo') setNewCargo(prev => ({ ...prev, cargoImage: base64 }));
             if (sketching.type === 'carriage') setNewCargo(prev => ({ ...prev, carriageImage: base64 }));
             if (sketching.type === 'bonus') setNewBonus(prev => ({ ...prev, image: base64 }));
-            if (sketching.type === 'start') setCurrentSystemAssets(prev => ({ ...prev, startImage: base64 }));
-            if (sketching.type === 'gateOpen') setCurrentSystemAssets(prev => ({ ...prev, gateOpenImage: base64 }));
-            if (sketching.type === 'gateClosed') setCurrentSystemAssets(prev => ({ ...prev, gateClosedImage: base64 }));
-            if (sketching.type === 'randomCargo') setCurrentSystemAssets(prev => ({ ...prev, randomCargoImage: base64 }));
+            if (sketching.type === 'start') updateSystemAssets({ startImage: base64 });
+            if (sketching.type === 'gateOpen') updateSystemAssets({ gateOpenImage: base64 });
+            if (sketching.type === 'gateClosed') updateSystemAssets({ gateClosedImage: base64 });
+            if (sketching.type === 'randomCargo') updateSystemAssets({ randomCargoImage: base64 });
+            if (sketching.type === 'carObstacle') updateSystemAssets({ carObstacleImage: base64 });
+            if (sketching.type === 'roadMid') updateSystemAssets({ roadMidImage: base64 });
+            if (sketching.type === 'roadEdge') updateSystemAssets({ roadEdgeImage: base64 });
             setSketching(null);
           }}
         />
@@ -1031,10 +1046,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.start_icon')}</h4>
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
-                  {currentSystemAssets.startImage ? (
-                    <img src={currentSystemAssets.startImage} alt="Start" className="w-full h-full object-contain p-2" />
+                  {systemAssets.startImage ? (
+                    <img src={systemAssets.startImage} alt="Start" className="w-full h-full object-contain p-2" />
                   ) : (
-                    currentSystemAssets.startEmoji
+                    systemAssets.startEmoji
                   )}
                 </div>
                 <div className="flex-1 space-y-3">
@@ -1055,7 +1070,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     </div>
                   </div>
                   <button 
-                    onClick={() => setSketching({ type: 'start', initial: currentSystemAssets.startImage })}
+                    onClick={() => setSketching({ type: 'start', initial: systemAssets.startImage })}
                     className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
                   >
                     <Pencil size={14} />
@@ -1070,10 +1085,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.random_cargo_icon')}</h4>
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
-                  {currentSystemAssets.randomCargoImage ? (
-                    <img src={currentSystemAssets.randomCargoImage} alt="Random Cargo" className="w-full h-full object-contain p-2" />
+                  {systemAssets.randomCargoImage ? (
+                    <img src={systemAssets.randomCargoImage} alt="Random Cargo" className="w-full h-full object-contain p-2" />
                   ) : (
-                    currentSystemAssets.randomCargoEmoji
+                    systemAssets.randomCargoEmoji
                   )}
                 </div>
                 <div className="flex-1 space-y-3">
@@ -1094,7 +1109,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     </div>
                   </div>
                   <button 
-                    onClick={() => setSketching({ type: 'randomCargo', initial: currentSystemAssets.randomCargoImage })}
+                    onClick={() => setSketching({ type: 'randomCargo', initial: systemAssets.randomCargoImage })}
                     className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
                   >
                     <Pencil size={14} />
@@ -1109,10 +1124,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.gate_open_icon')}</h4>
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
-                  {currentSystemAssets.gateOpenImage ? (
-                    <img src={currentSystemAssets.gateOpenImage} alt="Gate Open" className="w-full h-full object-contain p-2" />
+                  {systemAssets.gateOpenImage ? (
+                    <img src={systemAssets.gateOpenImage} alt="Gate Open" className="w-full h-full object-contain p-2" />
                   ) : (
-                    currentSystemAssets.gateOpenEmoji
+                    systemAssets.gateOpenEmoji
                   )}
                 </div>
                 <div className="flex-1 space-y-3">
@@ -1133,7 +1148,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     </div>
                   </div>
                   <button 
-                    onClick={() => setSketching({ type: 'gateOpen', initial: currentSystemAssets.gateOpenImage })}
+                    onClick={() => setSketching({ type: 'gateOpen', initial: systemAssets.gateOpenImage })}
                     className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
                   >
                     <Pencil size={14} />
@@ -1148,15 +1163,15 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">{t('settings.gate_closed_icon')}</h4>
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-2xl bg-blue-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
-                  {currentSystemAssets.gateClosedImage ? (
-                    <img src={currentSystemAssets.gateClosedImage} alt="Gate Closed" className="w-full h-full object-contain p-2" />
+                  {systemAssets.gateClosedImage ? (
+                    <img src={systemAssets.gateClosedImage} alt="Gate Closed" className="w-full h-full object-contain p-2" />
                   ) : (
-                    currentSystemAssets.gateClosedEmoji
+                    systemAssets.gateClosedEmoji
                   )}
                 </div>
                 <div className="flex-1 space-y-3">
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => setPickingEmoji('gateClosedEmoji')}
                       className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
                     >
@@ -1171,13 +1186,133 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                       <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'gateClosed')} className="absolute inset-0 opacity-0 cursor-pointer" />
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setSketching({ type: 'gateClosed', initial: currentSystemAssets.gateClosedImage })}
+                  <button
+                    onClick={() => setSketching({ type: 'gateClosed', initial: systemAssets.gateClosedImage })}
                     className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
                   >
                     <Pencil size={14} />
                     {t('settings.draw')}
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Car Obstacle */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">Car obstacle</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-red-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {systemAssets.carObstacleImage ? (
+                    <img src={systemAssets.carObstacleImage} alt="Car" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    systemAssets.carObstacleEmoji ?? '🚗'
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPickingEmoji('carObstacleEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'carObstacle')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSketching({ type: 'carObstacle', initial: systemAssets.carObstacleImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                  <p className="text-[10px] text-blue-900/40">Design facing right — auto-rotated for vertical roads.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Road Middle */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">Road — middle segment</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-gray-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {systemAssets.roadMidImage ? (
+                    <img src={systemAssets.roadMidImage} alt="Road Mid" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    systemAssets.roadMidEmoji ?? '🛣️'
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPickingEmoji('roadMidEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'roadMid')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSketching({ type: 'roadMid', initial: systemAssets.roadMidImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                  <p className="text-[10px] text-blue-900/40">Design horizontal — auto-rotated 90° for vertical roads.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Road Edge */}
+            <div className="sketch-card bg-white border-blue-950/20 p-6">
+              <h4 className="text-xs font-mono text-blue-900/40 uppercase mb-4">Road — edge / end cap</h4>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-gray-50 flex items-center justify-center text-5xl relative overflow-hidden border-2 border-blue-950/10">
+                  {systemAssets.roadEdgeImage ? (
+                    <img src={systemAssets.roadEdgeImage} alt="Road Edge" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    systemAssets.roadEdgeEmoji ?? '🛣️'
+                  )}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPickingEmoji('roadEdgeEmoji')}
+                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                    >
+                      <Smile size={14} />
+                      Emoji
+                    </button>
+                    <div className="relative flex-1">
+                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
+                        <ImageIcon size={14} />
+                        {t('settings.upload')}
+                      </button>
+                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'roadEdge')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSketching({ type: 'roadEdge', initial: systemAssets.roadEdgeImage })}
+                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    {t('settings.draw')}
+                  </button>
+                  <p className="text-[10px] text-blue-900/40">Design horizontal, cap on the right — end and start are auto-rotated 180° and 0° (horizontal) or ±90° (vertical).</p>
                 </div>
               </div>
             </div>
@@ -1235,10 +1370,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                             } else if (tab === 'BONUSES') {
                               setNewBonus(prev => ({ ...prev, emoji }));
                             } else if (tab === 'SYSTEM') {
-                              if (pickingEmoji === 'startEmoji') setCurrentSystemAssets(prev => ({ ...prev, startEmoji: emoji }));
-                              else if (pickingEmoji === 'gateOpenEmoji') setCurrentSystemAssets(prev => ({ ...prev, gateOpenEmoji: emoji }));
-                              else if (pickingEmoji === 'gateClosedEmoji') setCurrentSystemAssets(prev => ({ ...prev, gateClosedEmoji: emoji }));
-                              else if (pickingEmoji === 'randomCargoEmoji') setCurrentSystemAssets(prev => ({ ...prev, randomCargoEmoji: emoji }));
+                              if (pickingEmoji === 'startEmoji') updateSystemAssets({ startEmoji: emoji });
+                              else if (pickingEmoji === 'gateOpenEmoji') updateSystemAssets({ gateOpenEmoji: emoji });
+                              else if (pickingEmoji === 'gateClosedEmoji') updateSystemAssets({ gateClosedEmoji: emoji });
+                              else if (pickingEmoji === 'randomCargoEmoji') updateSystemAssets({ randomCargoEmoji: emoji });
+                              else if (pickingEmoji === 'carObstacleEmoji') updateSystemAssets({ carObstacleEmoji: emoji });
+                              else if (pickingEmoji === 'roadMidEmoji') updateSystemAssets({ roadMidEmoji: emoji });
+                              else if (pickingEmoji === 'roadEdgeEmoji') updateSystemAssets({ roadEdgeEmoji: emoji });
                             } else {
                               setNewCargo(prev => ({
                                 ...prev,

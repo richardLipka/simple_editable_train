@@ -9,6 +9,9 @@ export const DEFAULT_SYSTEM_ASSETS: SystemAssets = {
   gateOpenEmoji: '🏁',
   gateClosedEmoji: '🚧',
   randomCargoEmoji: '🎁',
+  carObstacleEmoji: '🚗',
+  roadMidEmoji: '🛣️',
+  roadEdgeEmoji: '🛣️',
 };
 
 export const DEFAULT_CARGO_TYPES: CargoType[] = [
