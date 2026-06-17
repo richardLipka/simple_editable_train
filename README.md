@@ -7,8 +7,9 @@ Default UI language is Czech (`cs`); English (`en`) is also supported.
 ## Features
 
 - **Campaign mode** — play through a sequence of custom levels
-- **Map editor** — draw walls, place cargo, set start/gate, and auto-generate paths
-- **Custom assets** — emoji fallbacks, image upload/crop, or hand-drawn wagon and wall art
+- **Map editor** — draw walls, place cargo, set start/gate, add moving car obstacles, and auto-generate paths
+- **Moving car obstacle** — a hazard that drives back and forth along a short road at half the train's speed and destroys the train on contact
+- **Custom assets** — emoji fallbacks, image upload/crop, or hand-drawn art for engines, walls, cargo, and system icons (including the car and road)
 - **Configurable cargo types** — engines, walls, cargo, and system icons
 - **Import / export** — back up or share full game configuration as JSON
 
@@ -41,7 +42,7 @@ No API keys or backend are required. Progress is stored in `localStorage`.
 2. Collect **cargo** to add wagons and increase your score.
 3. Collect **all cargo** on the level to open the gate.
 4. Enter the gate to complete the level.
-5. Avoid **walls** and **your own wagons**.
+5. Avoid **walls**, **your own wagons**, and any **moving car** crossing the track.
 
 ### Controls
 

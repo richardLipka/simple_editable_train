@@ -5,6 +5,27 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-17
+
+### Added
+
+- **Moving car obstacle** — a new hazard that drives back and forth along a short road and destroys the train on contact with the locomotive or any wagon
+  - Two-click placement in the map editor (start point, then end point along the same row or column)
+  - The car bounces between the two ends and travels at **half the train's speed**
+  - Erasing a road cell removes the obstacle that passes through it
+- **System asset editors for the car and road** — Settings → System now has cards for the car obstacle, road middle segment, and road edge/end cap (emoji, image upload/crop, or hand-drawn). Road edges are auto-rotated for vertical roads and start/end orientation.
+- Bundled sample config (`data/defaultData.json`) updated with a car-obstacle example and the new car/road system assets.
+
+### Changed
+
+- **Kids mode penalty** for bumping a wall or wagon raised to **-500** points.
+- Car, road, and other system assets now fall back to their configured **emoji** on the canvas (in both editor and game) when no custom image is set, instead of a plain placeholder shape.
+
+### Fixed
+
+- **System-asset edits are now saved immediately.** Drawn/uploaded/emoji edits to system assets (car, road, gates, start, random cargo) previously lived in local component state and were only persisted via the one "Save System" button — exiting via "Back" or switching tabs silently discarded them, so the game and editor kept showing old images. System assets are now sourced from a single source of truth and written to `localStorage` on every edit.
+- **Deadlock detection** — if the locomotive is stopped with no free neighbouring cell in any direction, the game now ends even in kids mode (previously kids mode could leave the player permanently stuck).
+
 ## [1.2.0] - 2026-06-17
 
 ### Changed
@@ -91,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.3.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.3.0...v1.0.0
