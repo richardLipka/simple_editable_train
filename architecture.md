@@ -56,7 +56,7 @@ Vlak/
     ├── types.ts            # Domain type definitions
     ├── constants.ts        # Defaults, grid constants, emoji picker data
     ├── i18n.ts             # i18next setup (cs/en)
-    ├── index.css             # Tailwind + sketch-style design tokens
+    ├── index.css           # Tailwind + sketch-style design tokens
     ├── locales/
     │   ├── cs.json         # Czech translations (primary)
     │   └── en.json         # English translations
@@ -66,7 +66,15 @@ Vlak/
     │   ├── SettingsManager.tsx  # Engines, walls, cargo, system assets
     │   ├── SketchPad.tsx   # In-app drawing tool for custom images
     │   └── CargoImageEditor.tsx # Image crop modal
-    └── services/
+    ├── game/
+    │   ├── trainMovement.ts # Train movement, collision detection, state transitions
+    │   └── scoring.ts       # Combo multipliers, star rating, cargo/bonus point resolution
+    └── utils/
+        ├── assetMaps.ts     # createIdMap, collectGameAssetUrls
+        ├── canvasBackground.ts # Cached grid background canvas
+        ├── configDefaults.ts   # Normalise/merge imported AppConfig
+        ├── directionInput.ts   # 180° reversal guard for direction changes
+        └── imagePreload.ts     # Global image cache + preload helper
 ```
 
 ## Core Domain Model (`src/types.ts`)
@@ -89,13 +97,14 @@ Vlak/
 |------|---------|
 | `EngineType` | Train locomotive (emoji or custom image) |
 | `WallType` | Wall tile appearance |
-| `CargoType` | Cargo pickup + carriage visuals (emoji, color, images) |
+| `CargoType` | Cargo pickup + carriage visuals (emoji, color, images, point value) |
+| `BonusType` | Optional bonus pickup (coin/star/gem, emoji or image, point value) |
 | `SystemAssets` | Start tile, gate open/closed, random cargo fallback icons |
 
 ### Runtime & config
 
-- **`GameState`**: Live play session (train segments, direction, score, collected cargo keys, animation progress)
-- **`AppConfig`**: Serializable bundle (`version`, `maps`, `engines`, `walls`, `cargoTypes`, `systemAssets`) used for import/export
+- **`GameState`**: Live play session (train segments, direction, score, collected cargo/bonus keys, combo streak, stars, animation progress)
+- **`AppConfig`**: Serializable bundle (`version`, `maps`, `engines`, `walls`, `cargoTypes`, `bonusTypes`, `systemAssets`) used for import/export
 
 ## Application State & Persistence
 
@@ -105,9 +114,11 @@ Vlak/
 |-------|----------------|------------------|
 | Maps (level sequence) | `INITIAL_MAP` from `constants.ts` | `train_logic_maps` |
 | Cargo types | `DEFAULT_CARGO_TYPES` | `train_logic_cargo` |
+| Bonus types | `DEFAULT_BONUS_TYPES` | `train_logic_bonus` |
 | Engines | `DEFAULT_ENGINES` | `train_logic_engines` |
 | Walls | `DEFAULT_WALLS` | `train_logic_walls` |
 | System assets | `DEFAULT_SYSTEM_ASSETS` | `train_logic_system` |
+| Kids mode | `false` | `train_logic_kids_mode` |
 
 On first launch, if no saved maps exist, the app seeds a single level from `INITIAL_MAP` (a 20×15 bordered map with sample cargo and a gate).
 
@@ -141,6 +152,13 @@ On first launch, if no saved maps exist, the app seeds a single level from `INIT
 - Moving on non-cargo cells → tail removed (train length unchanged)
 
 **Rendering:** HTML5 Canvas at `GRID_SIZE` (60px) per cell. Supports emoji fallbacks and cached custom images. Train segments rotate by movement direction. Optional `generatedPath` overlay for hints.
+
+**Performance design of the canvas effect:**
+
+- `cargoById` / `bonusById` lookup maps (`resolveCargoTypes` / `resolveBonusTypes`) are built **once** when the effect runs and passed into `moveTrain` via options — not rebuilt on every tick.
+- `Object.entries(map.cargoConfigs)` and `Object.entries(map.bonusConfigs)` are cached as local constants — not re-allocated on every animation frame.
+- Collected-key membership is tracked via `collectedCargoSetRef` / `collectedBonusSetRef` (`useRef<Set<string>>`), updated only when a tick actually fires — `drawFrame` (60 fps) reads the ref without any allocation.
+- A cached offscreen canvas (`staticLayer`) holds the grid background + walls + gate and is only rebuilt when the gate open/closed state flips (twice per level).
 
 ### Editor (`src/components/Editor.tsx`)
 

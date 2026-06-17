@@ -5,6 +5,16 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-17
+
+### Changed
+
+- **Performance** — eliminated per-frame allocations in the game loop
+  - `collectedCargoKeys` / `collectedBonusKeys` are now tracked as `Set` refs updated only on game ticks, instead of being rebuilt from arrays on every animation frame (60 fps)
+  - `Object.entries(map.cargoConfigs)` and `Object.entries(map.bonusConfigs)` are cached once at canvas effect setup, not re-allocated on every frame
+  - `resolveCargoTypes` / `resolveBonusTypes` (which build lookup `Map`s) are now called once per canvas effect run and passed into `moveTrain` via the new `cargoById` / `bonusById` options, instead of being called on every game tick
+  - Replaced `new Set(s.collectedCargoKeys).has()` / `new Set(s.collectedBonusKeys).has()` in `moveTrain` with `Array.prototype.includes()`, avoiding two Set allocations per tick
+
 ## [1.1.0] - 2026-06-17
 
 ### Removed
@@ -81,5 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.2.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/richardLipka/simple_editable_train/
+[1.0.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.3.0...v1.0.0
+[0.3.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/richardLipka/simple_editable_train/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/richardLipka/simple_editable_train/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/richardLipka/simple_editable_train/releases/tag/v0.1.0

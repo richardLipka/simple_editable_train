@@ -51,6 +51,8 @@ export interface MoveTrainOptions {
   softBump?: boolean;
   cargoTypes?: CargoType[];
   bonusTypes?: BonusType[];
+  cargoById?: Map<string, CargoType>;
+  bonusById?: Map<string, BonusType>;
   levelIndex?: number;
   kidsMode?: boolean;
   nowMs?: number;
@@ -92,8 +94,8 @@ export function moveTrain(
   const levelIndex = options?.levelIndex ?? 0;
   const activeCargoTypes = options?.cargoTypes ?? cargoTypes;
   const activeBonusTypes = options?.bonusTypes ?? DEFAULT_BONUS_TYPES;
-  const cargoById = resolveCargoTypes(activeCargoTypes, DEFAULT_CARGO_TYPES);
-  const bonusById = resolveBonusTypes(activeBonusTypes, DEFAULT_BONUS_TYPES);
+  const cargoById = options?.cargoById ?? resolveCargoTypes(activeCargoTypes, DEFAULT_CARGO_TYPES);
+  const bonusById = options?.bonusById ?? resolveBonusTypes(activeBonusTypes, DEFAULT_BONUS_TYPES);
   const levelMultiplier = getLevelScoreMultiplier(levelIndex);
 
   const newDirection = s.nextDirection;
@@ -107,13 +109,11 @@ export function moveTrain(
 
   const cargoKey = `${newHead.x},${newHead.y}`;
   const bonusKey = cargoKey;
-  const collectedCargo = new Set(s.collectedCargoKeys);
-  const collectedBonus = new Set(s.collectedBonusKeys);
   const cellInBounds =
     newHead.x >= 0 && newHead.x < map.width && newHead.y >= 0 && newHead.y < map.height;
   const cell = cellInBounds ? map.grid[newHead.y][newHead.x] : null;
-  const isActuallyCargo = cell === 'CARGO' && !collectedCargo.has(cargoKey);
-  const isActuallyBonus = cell === 'BONUS' && !collectedBonus.has(bonusKey);
+  const isActuallyCargo = cell === 'CARGO' && !s.collectedCargoKeys.includes(cargoKey);
+  const isActuallyBonus = cell === 'BONUS' && !s.collectedBonusKeys.includes(bonusKey);
   const willGrow = isActuallyCargo;
 
   const blockReason = resolveBlockReason(newHead, s, map, willGrow);

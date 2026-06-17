@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameMap, GameState, Direction, CargoType, CargoConfig, BonusConfig, BonusType, EngineType, WallType, SystemAssets, ScorePopup } from '../types';
-import { GRID_SIZE, TICK_RATE } from '../constants';
+import { GRID_SIZE, TICK_RATE, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES } from '../constants';
 import { Trophy, RotateCcw, Play as PlayIcon, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Gauge, Eye, EyeOff, Star } from 'lucide-react';
 import { createInitialGameState, getSegmentOrigin, moveTrain } from '../game/trainMovement';
+import { resolveCargoTypes, resolveBonusTypes } from '../game/scoring';
 import { getImageCache, preloadImages } from '../utils/imagePreload';
 import { collectGameAssetUrls, createIdMap } from '../utils/assetMaps';
 import { createGridBackground } from '../utils/canvasBackground';
@@ -62,6 +63,8 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
   const kidsModeRef = useRef(kidsMode);
   const levelIndexRef = useRef(levelIndex);
   const imageCache = getImageCache();
+  const collectedCargoSetRef = useRef<Set<string>>(new Set());
+  const collectedBonusSetRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     kidsModeRef.current = kidsMode;
@@ -123,6 +126,8 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     setState(newState);
     setScorePopups([]);
     lastProcessedPickupAtRef.current = 0;
+    collectedCargoSetRef.current = new Set();
+    collectedBonusSetRef.current = new Set();
     setIsPaused(false);
     isPausedRef.current = false;
     resetTimingRef.current = true;
@@ -176,8 +181,10 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     if (!ctx) return;
 
     const wallById = createIdMap<WallType>(walls);
-    const cargoById = createIdMap<CargoType>(cargoTypes);
-    const bonusById = createIdMap<BonusType>(bonusTypes);
+    const cargoById = resolveCargoTypes(cargoTypes, DEFAULT_CARGO_TYPES);
+    const bonusById = resolveBonusTypes(bonusTypes, DEFAULT_BONUS_TYPES);
+    const cargoEntries = Object.entries(map.cargoConfigs);
+    const bonusEntries = Object.entries(map.bonusConfigs ?? {});
     const selectedEngine: EngineType | undefined =
       engines.find((e) => e.id === map.selectedEngineId) || engines[0];
     const gridBackground = createGridBackground(canvas.width, canvas.height, map.width, map.height);
@@ -291,8 +298,8 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
       ctx.drawImage(staticLayer, 0, 0);
       drawPathOverlay();
 
-      const collectedCargo = new Set(gameState.collectedCargoKeys);
-      for (const [key, config] of Object.entries(map.cargoConfigs)) {
+      const collectedCargo = collectedCargoSetRef.current;
+      for (const [key, config] of cargoEntries) {
         if (collectedCargo.has(key)) continue;
 
         const comma = key.indexOf(',');
@@ -322,8 +329,8 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
         }
       }
 
-      const collectedBonus = new Set(gameState.collectedBonusKeys);
-      for (const [key, config] of Object.entries(map.bonusConfigs ?? {})) {
+      const collectedBonus = collectedBonusSetRef.current;
+      for (const [key, config] of bonusEntries) {
         if (collectedBonus.has(key)) continue;
 
         const comma = key.indexOf(',');
@@ -428,6 +435,8 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
             softBump: kidsModeRef.current,
             cargoTypes,
             bonusTypes,
+            cargoById,
+            bonusById,
             levelIndex: levelIndexRef.current,
             kidsMode: kidsModeRef.current,
             nowMs: performance.now(),
@@ -437,6 +446,11 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
 
         const updated = { ...next, moveProgress: newProgress };
         stateRef.current = updated;
+
+        if (next !== current) {
+          collectedCargoSetRef.current = new Set(updated.collectedCargoKeys);
+          collectedBonusSetRef.current = new Set(updated.collectedBonusKeys);
+        }
 
         if (needsHudUpdate(current, updated)) {
           setState(updated);
