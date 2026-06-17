@@ -1,7 +1,12 @@
 {
   "app": {
-    "title": "TRAIN LOGIC",
-    "subtitle": "Express Delivery Simulator",
+    "title": "Sketched Train",
+    "subtitle": "a fast web game",
+    "info": "About",
+    "info_author": "Author",
+    "info_made_by": "Made by Richard Lipka",
+    "info_source": "Source code on GitHub",
+    "info_close": "Close",
     "settings": "SETTINGS",
     "cargo_types": "CARGO TYPES",
     "new_map": "NEW MAP",

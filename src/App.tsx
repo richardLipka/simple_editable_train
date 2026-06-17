@@ -7,8 +7,9 @@ import { clearImageCache } from './utils/imagePreload';
 import { Play } from './components/Play';
 import { Editor } from './components/Editor';
 import { SettingsManager } from './components/SettingsManager';
-import { TrainFront, Map as MapIcon, Plus, Trash2, Play as PlayIcon, ChevronUp, ChevronDown, PackagePlus, Settings, Baby } from 'lucide-react';
+import { TrainFront, Map as MapIcon, Plus, Trash2, Play as PlayIcon, ChevronUp, ChevronDown, PackagePlus, Settings, Baby, Info, X, ExternalLink, Github } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import favLogo from './assets/fav_logo.png';
 
 export default function App() {
   const { t } = useTranslation();
@@ -16,6 +17,7 @@ export default function App() {
   const [maps, setMaps] = useState<GameMap[]>([INITIAL_MAP]);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
   const [editingMapIndex, setEditingMapIndex] = useState<number | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const [cargoTypes, setCargoTypes] = useState<CargoType[]>(DEFAULT_CARGO_TYPES);
   const [bonusTypes, setBonusTypes] = useState<BonusType[]>(DEFAULT_BONUS_TYPES);
   const [engines, setEngines] = useState<EngineType[]>(DEFAULT_ENGINES);
@@ -262,7 +264,15 @@ export default function App() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button 
+            <button
+              onClick={() => setShowInfo(true)}
+              className="sketch-button flex items-center justify-center bg-white"
+              title={t('app.info')}
+              aria-label={t('app.info')}
+            >
+              <Info size={18} />
+            </button>
+            <button
               onClick={() => setMode('SETTINGS')}
               className="sketch-button flex items-center gap-2 text-sm bg-white"
             >
@@ -285,6 +295,72 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        <AnimatePresence>
+          {showInfo && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setShowInfo(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg sketch-card bg-white border-blue-950 p-8 relative"
+              >
+                <button
+                  onClick={() => setShowInfo(false)}
+                  className="absolute top-4 right-4 text-blue-900/40 hover:text-blue-950 transition-colors"
+                  aria-label={t('app.info_close')}
+                >
+                  <X size={20} />
+                </button>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="p-3 bg-blue-950 text-white sketch-border">
+                    <TrainFront size={28} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tighter">{t('app.title')}</h2>
+                    <p className="text-blue-800/60 font-mono text-xs uppercase tracking-widest">{t('app.subtitle')}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-5 text-sm">
+                  <a
+                    href="https://home.zcu.cz/~lipka/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 font-bold text-blue-950 hover:text-blue-700 underline underline-offset-2"
+                  >
+                    {t('app.info_made_by')}
+                    <ExternalLink size={14} />
+                  </a>
+                  <a
+                    href="https://github.com/richardLipka/simple_editable_train"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-blue-700 hover:text-blue-950 font-mono underline underline-offset-2"
+                  >
+                    <Github size={16} />
+                    {t('app.info_source')}
+                  </a>
+                  <a
+                    href="https://kiv.zcu.cz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full hover:opacity-80 transition-opacity"
+                    aria-label="kiv.zcu.cz"
+                  >
+                    <img src={favLogo} alt="Fakulta aplikovaných věd ZČU" className="w-full h-auto" />
+                  </a>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence mode="wait">
           {mode === 'MENU' && (

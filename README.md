@@ -1,8 +1,8 @@
 # Trains Fluent
 
-A browser-based logic game where you steer a train on a grid, collect cargo to grow your wagons, and reach the exit gate. Includes a built-in map editor, custom assets, and a multi-level campaign — all running client-side in the browser.
+Displayed in-app as **Kreslený vláček** ("Sketched Train") — a browser-based logic game where you steer a train on a grid, collect cargo to grow your wagons, and reach the exit gate. Includes a built-in map editor, custom assets, and a multi-level campaign — all running client-side in the browser.
 
-Default UI language is Czech (`cs`); English (`en`) is also supported.
+Default UI language is Czech (`cs`); English (`en`) is also supported. An in-app **About** dialog (info button on the menu) credits the author and links to the source repository.
 
 ## Features
 

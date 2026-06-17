@@ -6,7 +6,7 @@ A client-side logic game where the player steers a train on a grid, collects car
 
 | Aspect | Detail |
 |--------|--------|
-| **App name** | Trains fluent (`metadata.json`) |
+| **App name** | Internal: `trains-fluent` (`package.json`) / "Trains fluent" (`metadata.json`). Displayed title: **"Kreslený vláček"** (from locale `app.title`) |
 | **Type** | Single-page React application (SPA) |
 | **Runtime** | Browser only — no server-side logic in `src/` |
 | **Persistence** | `localStorage` + JSON import/export |
@@ -57,6 +57,8 @@ Vlak/
     ├── constants.ts        # Defaults, grid constants, emoji picker data
     ├── i18n.ts             # i18next setup (cs/en)
     ├── index.css           # Tailwind + sketch-style design tokens
+    ├── assets/
+    │   └── fav_logo.png    # FAV ZČU faculty logo (bundled via Vite import, shown in About dialog)
     ├── locales/
     │   ├── cs.json         # Czech translations (primary)
     │   └── en.json         # English translations
@@ -81,15 +83,19 @@ Vlak/
 
 ### Grid & map
 
-- **`CellType`**: `EMPTY` | `WALL` | `GATE` | `CARGO` | `START`
+- **`CellType`**: `EMPTY` | `WALL` | `GATE` | `CARGO` | `BONUS` | `START`
 - **`Direction`**: `UP` | `DOWN` | `LEFT` | `RIGHT`
 - **`GameMap`**: A level definition
   - `grid`: 2D array of cell types (`height × width`)
   - `cargoConfigs`: keyed by `"x,y"` — `SPECIFIC` (fixed cargo type) or `RANDOM`
+  - `bonusConfigs`: keyed by `"x,y"` — references a `BonusType.id`
   - `wallConfigs`: keyed by `"x,y"` — references a `WallType.id`
+  - `carObstacles`: optional list of `CarObstacleDef` (moving car hazards — start/end cell defining a straight road)
   - `startPos`, `startDir`: train spawn
   - `selectedEngineId`: engine visual for this level
   - `generatedPath`, `pathAnchors`: optional editor hints (shown during play)
+
+- **`CarObstacleDef` / `CarObstacleState`**: A moving car hazard. The def stores `startPos`/`endPos` (same row or column); the runtime state tracks `pathIndex`, `prevPathIndex`, `direction`, and a `phase` flag that makes the car advance every other tick (half the train's speed). The car bounces between the two ends and ends the game on contact with any train segment.
 
 ### Asset types
 
@@ -99,7 +105,7 @@ Vlak/
 | `WallType` | Wall tile appearance |
 | `CargoType` | Cargo pickup + carriage visuals (emoji, color, images, point value) |
 | `BonusType` | Optional bonus pickup (coin/star/gem, emoji or image, point value) |
-| `SystemAssets` | Start tile, gate open/closed, random cargo fallback icons |
+| `SystemAssets` | Start tile, gate open/closed, random cargo fallback icons, and the moving-car / road (middle + auto-rotated edge) visuals — each as emoji and/or custom image |
 
 ### Runtime & config
 
@@ -133,6 +139,7 @@ On first launch, if no saved maps exist, the app seeds a single level from `INIT
 - Lists all maps in campaign order (reorderable via up/down)
 - Actions per level: play, edit, delete
 - Global actions: settings, cargo types, create new map, start campaign from level 1
+- **About dialog** — an info button opens a modal overlay with the author (linked to the author's homepage), a link to the GitHub source repository, and the bundled FAV ZČU faculty logo linking to `kiv.zcu.cz`
 
 ### Play (`src/components/Play.tsx`)
 
@@ -145,11 +152,13 @@ On first launch, if no saved maps exist, the app seeds a single level from `INIT
 
 **Movement rules (snake-like):**
 
-- Hitting bounds, `WALL`, own body → game over
+- Hitting bounds, `WALL`, own body, or a moving car → game over
 - Hitting `GATE` before all cargo collected → game over
 - Hitting `GATE` with all cargo collected → level complete
 - Hitting `CARGO` → add carriage (random or specific type), increment score, train grows
 - Moving on non-cargo cells → tail removed (train length unchanged)
+
+**Kids mode** softens wall/wagon bumps (the train stops instead of crashing) but applies a score penalty per bump. A **deadlock check** ends the game even in kids mode if the locomotive is stopped with no free neighbouring cell in any direction.
 
 **Rendering:** HTML5 Canvas at `GRID_SIZE` (60px) per cell. Supports emoji fallbacks and cached custom images. Train segments rotate by movement direction. Optional `generatedPath` overlay for hints.
 
@@ -170,8 +179,9 @@ On first launch, if no saved maps exist, the app seeds a single level from `INIT
 | `CARGO` | Place cargo (specific type or random) |
 | `GATE` | Single exit cell (replaces any existing gate) |
 | `START` | Single spawn cell, updates `startPos` |
-| `EMPTY` | Eraser |
+| `EMPTY` | Eraser (also removes any car obstacle passing through the cell) |
 | `PATH` | Draw/edit orthogonal solution path |
+| `CAR` | Two-click placement of a moving car obstacle (start cell, then end cell on the same row or column) |
 
 **Drawing modes:** point (freehand), rectangle, triangle, circle — applied as shape outlines.
 
@@ -191,7 +201,8 @@ Tabbed asset manager:
 | ENGINES | Locomotives | Select active engine per current map |
 | WALLS | Wall styles | |
 | CARGO | Cargo + carriage pairs | Swap cargo/carriage images |
-| SYSTEM | Start, gate, random cargo icons | |
+| BONUSES | Optional bonus pickups | Kind (coin/star/gem), point value |
+| SYSTEM | Start, gate, random cargo, car, road (middle + edge) icons | Edits persist immediately to `localStorage` |
 
 Asset input methods:
 
@@ -206,7 +217,7 @@ Built-in defaults (coal, wood, gold, food, oil, etc.) cannot be deleted; custom 
 - **Library:** i18next + react-i18next + browser language detector
 - **Config:** `src/i18n.ts` — default `cs`, fallback `cs`, detection via `localStorage` then `navigator`
 - **Namespaces:** Single `translation` namespace per locale file
-- **Coverage:** App shell, play UI, editor, settings, sketch pad, cargo editor
+- **Coverage:** App shell (incl. About dialog), play UI, editor, settings, sketch pad, cargo editor
 
 ## Styling & UX
 
@@ -225,7 +236,7 @@ Full `AppConfig` export at version `1.0`:
 | `engines` | steam, diesel, electric — all with base64 images |
 | `walls` | brick, stone, metal — all with base64 images |
 | `cargoTypes` | 5 default types — cargo + carriage images |
-| `systemAssets` | Emoji fallbacks for start, gates, random cargo |
+| `systemAssets` | Emoji/image fallbacks for start, gates, random cargo, car, and road (middle + edge) |
 
 The file is large (~1.3 MB) due to embedded base64 image data. It mirrors the runtime `AppConfig` schema exactly.
 

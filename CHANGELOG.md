@@ -5,6 +5,17 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-17
+
+### Added
+
+- **About dialog** — an info button in the menu header opens a dialog with the author, a link to the source repository on GitHub, and the Faculty of Applied Sciences (FAV ZČU) logo linking to [kiv.zcu.cz](https://kiv.zcu.cz). The author name links to the author's homepage.
+- Bundled the FAV faculty logo as a local asset (`src/assets/fav_logo.png`), imported through Vite so it ships as a hashed build asset with no external hotlinking at runtime.
+
+### Changed
+
+- **Renamed the game** to **"Kreslený vláček"** with the subtitle "rychlá webová hra" (English: "Sketched Train" / "a fast web game"). The previous name was "Vláčková logika / Train Logic".
+
 ## [1.3.0] - 2026-06-17
 
 ### Added
@@ -112,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.4.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.0.0...v1.1.0

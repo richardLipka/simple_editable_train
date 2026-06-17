@@ -1,7 +1,12 @@
 {
   "app": {
-    "title": "VLÁČKOVÁ LOGIKA",
-    "subtitle": "Simulátor expresní dopravy",
+    "title": "Kreslený vláček",
+    "subtitle": "rychlá webová hra",
+    "info": "O hře",
+    "info_author": "Autor",
+    "info_made_by": "Vytvořil Richard Lipka",
+    "info_source": "Zdrojový kód na GitHubu",
+    "info_close": "Zavřít",
     "settings": "NASTAVENÍ",
     "cargo_types": "TYPY NÁKLADU",
     "new_map": "NOVÁ MAPA",
