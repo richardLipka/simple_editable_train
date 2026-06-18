@@ -28,7 +28,31 @@ interface SettingsManagerProps {
   onImportConfig: (config: unknown) => void;
 }
 
-export const SettingsManager: React.FC<SettingsManagerProps> = ({ 
+// Compact icon-only action button; the label is shown as a hover tooltip.
+const ActionIconButton: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+    className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center py-2"
+  >
+    {icon}
+  </button>
+);
+
+// Compact icon-only upload button; a transparent file input overlays it so the
+// whole area opens the file picker. The label is shown as a hover tooltip.
+const UploadIconButton: React.FC<{ label: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }> = ({ label, onChange }) => (
+  <div className="relative flex-1">
+    <button type="button" title={label} aria-label={label} className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center py-2">
+      <ImageIcon size={14} />
+    </button>
+    <input type="file" accept="image/*" title={label} onChange={onChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+  </div>
+);
+
+export const SettingsManager: React.FC<SettingsManagerProps> = ({
   engines, 
   walls, 
   cargoTypes,
@@ -671,32 +695,9 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                       <div className="space-y-4">
                         <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.cargo_icon')}</label>
                         <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
-                              <ImageIcon size={14} />
-                              {t('settings.upload')}
-                            </button>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={e => handleImageUpload(e, 'cargo')}
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                            />
-                          </div>
-                          <button
-                            onClick={() => setCapturing({ type: 'cargo' })}
-                            className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                          >
-                            <Camera size={14} />
-                            {t('settings.camera')}
-                          </button>
-                          <button
-                            onClick={() => setSketching({ type: 'cargo', initial: newCargo.cargoImage })}
-                            className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                          >
-                            <Pencil size={14} />
-                            {t('settings.draw')}
-                          </button>
+                          <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'cargo')} />
+                          <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'cargo' })} />
+                          <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'cargo', initial: newCargo.cargoImage })} />
                         </div>
                         <div className="aspect-square bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
                           {newCargo.cargoImage ? (
@@ -721,32 +722,9 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     <div className="space-y-4">
                       <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.carriage_icon')}</label>
                       <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
-                            <ImageIcon size={14} />
-                            {t('settings.upload')}
-                          </button>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={e => handleImageUpload(e, 'carriage')}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                          />
-                        </div>
-                        <button
-                          onClick={() => setCapturing({ type: 'carriage' })}
-                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                        >
-                          <Camera size={14} />
-                          {t('settings.camera')}
-                        </button>
-                        <button
-                          onClick={() => setSketching({ type: 'carriage', initial: newCargo.carriageImage })}
-                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                        >
-                          <Pencil size={14} />
-                          {t('settings.draw')}
-                        </button>
+                        <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'carriage')} />
+                        <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'carriage' })} />
+                        <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'carriage', initial: newCargo.carriageImage })} />
                       </div>
                       <div className="aspect-square bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
                         {newCargo.carriageImage ? (
@@ -772,32 +750,9 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     <div className="space-y-4">
                       <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.custom_asset')}</label>
                       <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
-                            <ImageIcon size={14} />
-                            {t('settings.upload')}
-                          </button>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleImageUpload(e, 'bonus')}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                          />
-                        </div>
-                        <button
-                          onClick={() => setCapturing({ type: 'bonus' })}
-                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                        >
-                          <Camera size={14} />
-                          {t('settings.camera')}
-                        </button>
-                        <button
-                          onClick={() => setSketching({ type: 'bonus', initial: newBonus.image })}
-                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                        >
-                          <Pencil size={14} />
-                          {t('settings.draw')}
-                        </button>
+                        <UploadIconButton label={t('settings.upload')} onChange={(e) => handleImageUpload(e, 'bonus')} />
+                        <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'bonus' })} />
+                        <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'bonus', initial: newBonus.image })} />
                       </div>
                       <div className="aspect-square max-w-[200px] bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
                         {newBonus.image ? (
@@ -819,32 +774,9 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     <div className="space-y-4">
                       <label className="block text-xs font-mono text-blue-900/40 uppercase">{t('settings.custom_asset')}</label>
                       <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <button className="sketch-button w-full bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2">
-                            <ImageIcon size={14} />
-                            {t('settings.upload')}
-                          </button>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={e => handleImageUpload(e, tab === 'ENGINES' ? 'engine' : 'wall')}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                          />
-                        </div>
-                        <button
-                          onClick={() => setCapturing({ type: tab === 'ENGINES' ? 'engine' : 'wall' })}
-                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                        >
-                          <Camera size={14} />
-                          {t('settings.camera')}
-                        </button>
-                        <button
-                          onClick={() => setSketching({ type: tab === 'ENGINES' ? 'engine' : 'wall', initial: tab === 'ENGINES' ? newEngine.image : newWall.image })}
-                          className="sketch-button flex-1 bg-white text-blue-950 flex items-center justify-center gap-2 text-xs py-2"
-                        >
-                          <Pencil size={14} />
-                          {t('settings.draw')}
-                        </button>
+                        <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, tab === 'ENGINES' ? 'engine' : 'wall')} />
+                        <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: tab === 'ENGINES' ? 'engine' : 'wall' })} />
+                        <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: tab === 'ENGINES' ? 'engine' : 'wall', initial: tab === 'ENGINES' ? newEngine.image : newWall.image })} />
                       </div>
                       <div className="aspect-square max-w-[200px] bg-white border-2 border-dashed border-blue-950/20 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
                         {(tab === 'ENGINES' ? newEngine.image : newWall.image) ? (
@@ -1101,37 +1033,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.startEmoji
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1">
                   <div className="flex gap-2">
-                    <button 
-                      onClick={() => setPickingEmoji('startEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'start')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'start' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('startEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'start')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'start' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'start', initial: systemAssets.startImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'start', initial: systemAssets.startImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1147,37 +1055,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.randomCargoEmoji
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1">
                   <div className="flex gap-2">
-                    <button 
-                      onClick={() => setPickingEmoji('randomCargoEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'randomCargo')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'randomCargo' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('randomCargoEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'randomCargo')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'randomCargo' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'randomCargo', initial: systemAssets.randomCargoImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'randomCargo', initial: systemAssets.randomCargoImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1193,37 +1077,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.gateOpenEmoji
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1">
                   <div className="flex gap-2">
-                    <button 
-                      onClick={() => setPickingEmoji('gateOpenEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'gateOpen')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'gateOpen' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('gateOpenEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'gateOpen')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'gateOpen' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'gateOpen', initial: systemAssets.gateOpenImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'gateOpen', initial: systemAssets.gateOpenImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1239,37 +1099,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.gateClosedEmoji
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1">
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setPickingEmoji('gateClosedEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'gateClosed')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'gateClosed' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('gateClosedEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'gateClosed')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'gateClosed' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'gateClosed', initial: systemAssets.gateClosedImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'gateClosed', initial: systemAssets.gateClosedImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1285,37 +1121,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.carObstacleEmoji ?? '🚗'
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-2">
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setPickingEmoji('carObstacleEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'carObstacle')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'carObstacle' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('carObstacleEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'carObstacle')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'carObstacle' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'carObstacle', initial: systemAssets.carObstacleImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'carObstacle', initial: systemAssets.carObstacleImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                   <p className="text-[10px] text-blue-900/40">{t('settings.car_obstacle_hint')}</p>
                 </div>
               </div>
@@ -1332,37 +1144,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.roadMidEmoji ?? '🛣️'
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-2">
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setPickingEmoji('roadMidEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'roadMid')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'roadMid' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('roadMidEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'roadMid')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'roadMid' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'roadMid', initial: systemAssets.roadMidImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'roadMid', initial: systemAssets.roadMidImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                   <p className="text-[10px] text-blue-900/40">{t('settings.road_mid_hint')}</p>
                 </div>
               </div>
@@ -1379,37 +1167,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                     systemAssets.roadEdgeEmoji ?? '🛣️'
                   )}
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-2">
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setPickingEmoji('roadEdgeEmoji')}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Smile size={14} />
-                      {t('settings.emoji')}
-                    </button>
-                    <div className="relative flex-1">
-                      <button className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2">
-                        <ImageIcon size={14} />
-                        {t('settings.upload')}
-                      </button>
-                      <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'roadEdge')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </div>
-                    <button
-                      onClick={() => setCapturing({ type: 'roadEdge' })}
-                      className="sketch-button flex-1 bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                    >
-                      <Camera size={14} />
-                      {t('settings.camera')}
-                    </button>
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('roadEdgeEmoji')} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'roadEdge')} />
+                    <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'roadEdge' })} />
+                    <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'roadEdge', initial: systemAssets.roadEdgeImage })} />
                   </div>
-                  <button
-                    onClick={() => setSketching({ type: 'roadEdge', initial: systemAssets.roadEdgeImage })}
-                    className="sketch-button w-full bg-white text-blue-950 text-xs py-2 flex items-center justify-center gap-2"
-                  >
-                    <Pencil size={14} />
-                    {t('settings.draw')}
-                  </button>
                   <p className="text-[10px] text-blue-900/40">{t('settings.road_edge_hint')}</p>
                 </div>
               </div>
