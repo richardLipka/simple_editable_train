@@ -250,7 +250,7 @@ Full `AppConfig` export at version `1.0`:
 | `cargoTypes` | 5 default types — cargo + carriage images |
 | `systemAssets` | Emoji/image fallbacks for start, gates, random cargo, car, and road (middle + edge) |
 
-The file is large (~1.3 MB) due to embedded base64 image data. It mirrors the runtime `AppConfig` schema exactly.
+Images are stored as 128px WebP (regenerated via `scripts/compress-default-data.mjs`), so the file is ~110 KB. It mirrors the runtime `AppConfig` schema exactly.
 
 ## Build & Development
 

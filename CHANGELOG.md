@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Asset images are now compressed at the source.** Every custom asset (uploaded photo, camera capture, or hand-drawn sketch) is downscaled to a 128×128 square and re-encoded as **WebP** (with a PNG fallback where WebP isn't supported) before being stored. Previously images were saved as full-resolution lossless PNG — a single photo crop could be several MB and overflow the ~5 MB `localStorage` quota. Typical assets drop from 36–139 KB to ~3–8 KB each (≈10–15× smaller). WebP keeps an alpha channel, so magic-wand transparency is preserved. New shared module: `src/utils/imageEncoding.ts`.
 - **Sketch pad is now a coarse pixel grid.** The drawing surface stays large (512px on screen) but works at the 128×128 asset resolution, displayed 4× larger with crisp (`pixelated`) rendering. All tools snap to a 2×2-pixel unit and the pencil/eraser stamp aligned blocks, so strokes stay clean at the stored resolution. Brush sizes are now multiples of the pixel unit (2/4/6/8).
 - **Crop editor outputs the final 128px WebP directly**, so both image upload and camera capture (which routes through the crop editor) are capped at the small size.
+- **The bundled sample config (`data/defaultData.json`) was regenerated** with 128px WebP images, shrinking it from ~1.5 MB to ~110 KB. Regeneration tool: `scripts/compress-default-data.mjs`.
 
 ### Added
 
