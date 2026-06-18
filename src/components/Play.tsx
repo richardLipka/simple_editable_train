@@ -585,7 +585,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
             <button 
               onClick={() => setShowPath(!showPath)}
               className={`p-2 rounded-lg border transition-colors ${showPath ? 'bg-blue-950 text-white border-blue-950' : 'bg-white border-blue-950 text-blue-950 hover:bg-blue-50'}`}
-              title={showPath ? "Hide Path Hint" : "Show Path Hint"}
+              title={showPath ? t('play.hide_path_hint') : t('play.show_path_hint')}
             >
               {showPath ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>

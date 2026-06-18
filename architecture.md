@@ -1,4 +1,4 @@
-# Architecture — Trains Fluent (Vláčková logika)
+# Architecture — Trains Fluent (Kreslený vláček)
 
 A client-side logic game where the player steers a train on a grid, collects cargo to grow the train, and must gather all cargo before exiting through the gate. The app also includes a full map editor and asset customization system.
 
@@ -33,8 +33,9 @@ A client-side logic game where the player steers a train on a grid, collects car
 └─────────────────────────────────────────────────────────────────┘
 
 Supporting UI (modal overlays):
-  SketchPad ──► custom asset drawing (base64 PNG)
+  SketchPad ──► custom asset drawing + magic-wand transparency (base64 PNG)
   CargoImageEditor ──► image upload crop (react-easy-crop)
+  CameraCapture ──► live webcam capture (getUserMedia) → crop
 ```
 
 The application uses **mode-based view switching** inside `App.tsx` rather than a routing library. Five modes exist: `MENU`, `PLAY`, `EDITOR`, `CARGO_CONFIG`, and `SETTINGS`.
@@ -66,15 +67,17 @@ Vlak/
     │   ├── Play.tsx        # Gameplay view + canvas renderer
     │   ├── Editor.tsx      # Map editor + procedural generation
     │   ├── SettingsManager.tsx  # Engines, walls, cargo, system assets
-    │   ├── SketchPad.tsx   # In-app drawing tool for custom images
-    │   └── CargoImageEditor.tsx # Image crop modal
+    │   ├── SketchPad.tsx   # In-app drawing tool + magic-wand delete-to-transparency
+    │   ├── CargoImageEditor.tsx # Image crop modal
+    │   ├── CameraCapture.tsx    # Live webcam capture modal (getUserMedia)
+    │   └── LanguageSwitcher.tsx # Fixed top-right CS/EN toggle (i18n)
     ├── game/
     │   ├── trainMovement.ts # Train movement, collision detection, state transitions
     │   └── scoring.ts       # Combo multipliers, star rating, cargo/bonus point resolution
     └── utils/
         ├── assetMaps.ts     # createIdMap, collectGameAssetUrls
         ├── canvasBackground.ts # Cached grid background canvas
-        ├── configDefaults.ts   # Normalise/merge imported AppConfig
+        ├── configDefaults.ts   # Resilient sanitize/merge of imported & stored AppConfig
         ├── directionInput.ts   # 180° reversal guard for direction changes
         └── imagePreload.ts     # Global image cache + preload helper
 ```
@@ -110,7 +113,7 @@ Vlak/
 ### Runtime & config
 
 - **`GameState`**: Live play session (train segments, direction, score, collected cargo/bonus keys, combo streak, stars, animation progress)
-- **`AppConfig`**: Serializable bundle (`version`, `maps`, `engines`, `walls`, `cargoTypes`, `bonusTypes`, `systemAssets`) used for import/export
+- **`AppConfig`**: Serializable bundle (`version`, `maps`, `engines`, `walls`, `cargoTypes`, `bonusTypes`, `systemAssets`, and the optional `kidsMode` preference) used for import/export
 
 ## Application State & Persistence
 
@@ -128,7 +131,9 @@ Vlak/
 
 On first launch, if no saved maps exist, the app seeds a single level from `INITIAL_MAP` (a 20×15 bordered map with sample cargo and a gate).
 
-**Import/export**: `SettingsManager` triggers JSON download/upload of a full `AppConfig`. This is the same schema as `data/defaultData.json`.
+**Resilient loading & saving** (`src/utils/configDefaults.ts`): both `localStorage` reads and JSON imports flow through `sanitizeAppConfig` / `sanitizeMaps`, which never throw. They salvage every valid element, drop invalid or unknown ones, rebuild map grids to an exact `width × height` matrix of valid cells, clamp out-of-range values, and return a summary of what was skipped (shown to the user on import). A single corrupt `localStorage` key is logged and ignored without blocking the others, and writes are wrapped to catch `QuotaExceededError` (large base64 images) instead of crashing.
+
+**Import/export**: `SettingsManager` triggers JSON download/upload of a full `AppConfig` (including the `kidsMode` preference). This is the same schema as `data/defaultData.json`. Preset loading uses the same resilient path, so partially-valid presets still load.
 
 > **Note:** `data/defaultData.json` is not imported by the application at runtime. It serves as a bundled configuration snapshot (3 levels, all default assets with embedded base64 images). Use Settings → Import to load it, or reference it as a seed/template.
 
@@ -208,7 +213,10 @@ Asset input methods:
 
 - Emoji picker (`EMOJI_LIST` categories in `constants.ts`)
 - Image upload → crop (`CargoImageEditor`)
+- Camera capture → crop (`CameraCapture`, live webcam via `getUserMedia`; needs HTTPS or `localhost`)
 - Hand-draw (`SketchPad`) → saved as base64 PNG
+
+`SketchPad` also provides a **magic-wand** tool: it flood-selects a contiguous region of similarly-colored pixels (RGBA distance within an adjustable similarity threshold) and deletes the selection to full transparency, with a live selection overlay and a checkerboard backdrop so transparent areas are visible.
 
 Built-in defaults (coal, wood, gold, food, oil, etc.) cannot be deleted; custom entries can.
 
@@ -218,6 +226,7 @@ Built-in defaults (coal, wood, gold, food, oil, etc.) cannot be deleted; custom 
 - **Config:** `src/i18n.ts` — default `cs`, fallback `cs`, detection via `localStorage` then `navigator`
 - **Namespaces:** Single `translation` namespace per locale file
 - **Coverage:** App shell (incl. About dialog), play UI, editor, settings, sketch pad, cargo editor
+- **Runtime switching:** `LanguageSwitcher` (a small fixed CS/EN toggle in the top-right corner, shown on every screen) calls `i18n.changeLanguage`; the detector caches the choice to `localStorage`
 
 ## Styling & UX
 
@@ -254,6 +263,7 @@ npm run lint     # TypeScript check (tsc --noEmit)
 
 - `@/` path alias to project root
 - HMR can be disabled via `DISABLE_HMR=true`
+- The real app version is read from `package.json` and injected into the bundle as the `__APP_VERSION__` global (`define`), used for the exported config's `version` field
 
 ## Key Constants (`src/constants.ts`)
 

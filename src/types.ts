@@ -90,6 +90,7 @@ export interface AppConfig {
   cargoTypes: CargoType[];
   bonusTypes?: BonusType[];
   systemAssets: SystemAssets;
+  kidsMode?: boolean;
 }
 
 export interface CarObstacleDef {

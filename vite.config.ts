@@ -9,6 +9,9 @@ import type { IncomingMessage, ServerResponse } from 'http';
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(rootDir, 'data');
 
+// Expose the real app version (from package.json) to the bundle as __APP_VERSION__.
+const pkg = JSON.parse(fs.readFileSync(path.resolve(rootDir, 'package.json'), 'utf8')) as { version: string };
+
 function serveDataFile(
   req: IncomingMessage,
   res: ServerResponse,
@@ -67,6 +70,9 @@ function dataFolderPlugin(): Plugin {
 
 export default defineConfig({
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [react(), tailwindcss(), dataFolderPlugin()],
   resolve: {
     alias: {

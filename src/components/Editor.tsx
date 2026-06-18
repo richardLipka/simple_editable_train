@@ -1194,7 +1194,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
               { id: 'BONUS', icon: <Sparkles size={18} />, label: t('editor.bonus') },
               { id: 'START', icon: <Play size={18} />, label: t('editor.start') },
               { id: 'PATH', icon: <Route size={18} />, label: t('editor.path') },
-              { id: 'CAR', icon: <Car size={18} />, label: 'Car' },
+              { id: 'CAR', icon: <Car size={18} />, label: t('editor.car') },
             ].map(tool => (
               <button
                 key={tool.id}

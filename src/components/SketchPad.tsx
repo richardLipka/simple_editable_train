@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers } from 'lucide-react';
+import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers, Wand2, Delete } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface SketchPadProps {
@@ -11,13 +11,24 @@ interface SketchPadProps {
   title?: string;
 }
 
-type Tool = 'PENCIL' | 'ERASER' | 'RECT' | 'CIRCLE' | 'LINE' | 'FILL';
+type Tool = 'PENCIL' | 'ERASER' | 'RECT' | 'CIRCLE' | 'LINE' | 'FILL' | 'WAND';
 type BrushSize = 2 | 4 | 8 | 12;
 
 export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialImage, title }) => {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Separate transparent canvas layered on top, used only to draw the magic
+  // wand selection marquee so it never gets baked into the artwork.
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<Tool>('PENCIL');
+  // Magic wand: similarity threshold (0 = exact color only, 100 = everything)
+  // and the current selection mask (1 byte per pixel, 1 = selected).
+  const [tolerance, setTolerance] = useState(20);
+  const [hasSelection, setHasSelection] = useState(false);
+  const selectionRef = useRef<Uint8Array | null>(null);
+  // Remember the last wand click so dragging the slider re-runs the selection
+  // live without needing the user to click again.
+  const lastWandRef = useRef<{ x: number; y: number } | null>(null);
   const [brushSize, setBrushSize] = useState<BrushSize>(4);
   const [color, setColor] = useState('#172554');
   const [fillColor, setFillColor] = useState('#ffffff');
@@ -159,11 +170,13 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     const img = new Image();
     img.src = lastState;
     img.onload = () => {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Clear (not white-fill) so transparent regions in the snapshot survive
+      // the undo — the snapshot PNG already carries its own background.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
       setHistory(newHistory);
     };
+    clearSelection();
   };
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
@@ -248,8 +261,152 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     ctx.putImageData(imageData, 0, 0);
   };
 
+  // ---- Magic wand selection ------------------------------------------------
+
+  const clearSelection = () => {
+    selectionRef.current = null;
+    lastWandRef.current = null;
+    setHasSelection(false);
+    const overlay = overlayRef.current;
+    const octx = overlay?.getContext('2d');
+    octx?.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  };
+
+  // Paint the selection onto the overlay: a light tint for the interior plus a
+  // stronger outline on border pixels so the selected region reads clearly.
+  const renderSelectionOverlay = (mask: Uint8Array) => {
+    const overlay = overlayRef.current;
+    const octx = overlay?.getContext('2d');
+    if (!octx) return;
+    octx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    const overlayData = octx.createImageData(CANVAS_SIZE, CANVAS_SIZE);
+    const od = overlayData.data;
+    const W = CANVAS_SIZE;
+    const H = CANVAS_SIZE;
+    for (let p = 0; p < mask.length; p++) {
+      if (!mask[p]) continue;
+      const cx = p % W;
+      const cy = (p / W) | 0;
+      const isBorder =
+        cx === 0 || cx === W - 1 || cy === 0 || cy === H - 1 ||
+        !mask[p - 1] || !mask[p + 1] || !mask[p - W] || !mask[p + W];
+      const oi = p * 4;
+      if (isBorder) {
+        od[oi] = 37; od[oi + 1] = 99; od[oi + 2] = 235; od[oi + 3] = 235;
+      } else {
+        od[oi] = 59; od[oi + 1] = 130; od[oi + 2] = 246; od[oi + 3] = 70;
+      }
+    }
+    octx.putImageData(overlayData, 0, 0);
+  };
+
+  // Flood-select all pixels contiguously reachable from (x,y) whose color is
+  // within the tolerance distance of the clicked pixel's color (RGBA).
+  const magicWandSelect = (x: number, y: number, tol = tolerance) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    if (ix < 0 || iy < 0 || ix >= CANVAS_SIZE || iy >= CANVAS_SIZE) return;
+
+    const W = CANVAS_SIZE;
+    const H = CANVAS_SIZE;
+    const data = ctx.getImageData(0, 0, W, H).data;
+    const startIdx = (iy * W + ix) * 4;
+    const tr = data[startIdx];
+    const tg = data[startIdx + 1];
+    const tb = data[startIdx + 2];
+    const ta = data[startIdx + 3];
+
+    // Max RGBA Euclidean distance is sqrt(4)*255 ≈ 510; scale by the slider.
+    const maxDist = (tol / 100) * 510;
+    const thresholdSq = maxDist * maxDist;
+
+    const matches = (p: number) => {
+      const di = p * 4;
+      const dr = data[di] - tr;
+      const dg = data[di + 1] - tg;
+      const db = data[di + 2] - tb;
+      const da = data[di + 3] - ta;
+      return dr * dr + dg * dg + db * db + da * da <= thresholdSq;
+    };
+
+    const mask = new Uint8Array(W * H);
+    const visited = new Uint8Array(W * H);
+    const stack: number[] = [iy * W + ix];
+    while (stack.length) {
+      const p = stack.pop()!;
+      if (visited[p]) continue;
+      visited[p] = 1;
+      if (!matches(p)) continue;
+      mask[p] = 1;
+      const cx = p % W;
+      const cy = (p / W) | 0;
+      if (cx + 1 < W) stack.push(p + 1);
+      if (cx - 1 >= 0) stack.push(p - 1);
+      if (cy + 1 < H) stack.push(p + W);
+      if (cy - 1 >= 0) stack.push(p - W);
+    }
+
+    selectionRef.current = mask;
+    lastWandRef.current = { x: ix, y: iy };
+    setHasSelection(true);
+    renderSelectionOverlay(mask);
+  };
+
+  // Erase the selected pixels to full transparency (alpha = 0).
+  const deleteSelection = () => {
+    const mask = selectionRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!mask || !ctx) return;
+    const imageData = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    const data = imageData.data;
+    for (let p = 0; p < mask.length; p++) {
+      if (!mask[p]) continue;
+      const di = p * 4;
+      data[di] = 0;
+      data[di + 1] = 0;
+      data[di + 2] = 0;
+      data[di + 3] = 0;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    clearSelection();
+    saveToHistory();
+  };
+
+  const selectTool = (newTool: Tool) => {
+    if (newTool !== 'WAND') clearSelection();
+    setTool(newTool);
+  };
+
+  // Delete / Backspace removes the selection; Escape deselects.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (!selectionRef.current) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelection();
+      } else if (e.key === 'Escape') {
+        clearSelection();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     const pos = getPos(e);
+
+    if (tool === 'WAND') {
+      magicWandSelect(pos.x, pos.y);
+      return;
+    }
+
     setStartPos(pos);
     setIsDrawing(true);
 
@@ -373,6 +530,7 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    clearSelection();
     applyBackground(ctx);
     saveToHistory();
     setShowClearConfirm(false);
@@ -387,12 +545,13 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       <div className="sketch-card bg-white w-full max-w-4xl flex flex-col md:flex-row gap-8 overflow-hidden max-h-[95vh]">
         {/* Toolbar */}
         <div className="flex md:flex-col gap-2 p-2 bg-blue-50 rounded-xl border border-blue-100 overflow-x-auto md:overflow-x-visible">
-          <ToolButton active={tool === 'PENCIL'} onClick={() => setTool('PENCIL')} icon={<Pencil size={20} />} label={t('sketchpad.pencil')} />
-          <ToolButton active={tool === 'ERASER'} onClick={() => setTool('ERASER')} icon={<Eraser size={20} />} label={t('sketchpad.eraser')} />
-          <ToolButton active={tool === 'RECT'} onClick={() => setTool('RECT')} icon={<Square size={20} />} label={t('sketchpad.rectangle')} />
-          <ToolButton active={tool === 'CIRCLE'} onClick={() => setTool('CIRCLE')} icon={<Circle size={20} />} label={t('sketchpad.circle')} />
-          <ToolButton active={tool === 'LINE'} onClick={() => setTool('LINE')} icon={<Minus size={20} />} label={t('sketchpad.line')} />
-          <ToolButton active={tool === 'FILL'} onClick={() => setTool('FILL')} icon={<PaintBucket size={20} />} label={t('sketchpad.fill')} />
+          <ToolButton active={tool === 'PENCIL'} onClick={() => selectTool('PENCIL')} icon={<Pencil size={20} />} label={t('sketchpad.pencil')} />
+          <ToolButton active={tool === 'ERASER'} onClick={() => selectTool('ERASER')} icon={<Eraser size={20} />} label={t('sketchpad.eraser')} />
+          <ToolButton active={tool === 'RECT'} onClick={() => selectTool('RECT')} icon={<Square size={20} />} label={t('sketchpad.rectangle')} />
+          <ToolButton active={tool === 'CIRCLE'} onClick={() => selectTool('CIRCLE')} icon={<Circle size={20} />} label={t('sketchpad.circle')} />
+          <ToolButton active={tool === 'LINE'} onClick={() => selectTool('LINE')} icon={<Minus size={20} />} label={t('sketchpad.line')} />
+          <ToolButton active={tool === 'FILL'} onClick={() => selectTool('FILL')} icon={<PaintBucket size={20} />} label={t('sketchpad.fill')} />
+          <ToolButton active={tool === 'WAND'} onClick={() => selectTool('WAND')} icon={<Wand2 size={20} />} label={t('sketchpad.magic_wand')} />
           <div className="h-px bg-blue-200 my-2 hidden md:block" />
           <ToolButton active={false} onClick={undo} icon={<Undo2 size={20} />} label={t('sketchpad.undo')} disabled={history.length <= 1} />
           <ToolButton active={false} onClick={clear} icon={<Trash2 size={20} />} label={t('sketchpad.clear')} />
@@ -410,7 +569,17 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
             </button>
           </div>
 
-          <div className="relative aspect-square w-full max-w-[512px] mx-auto bg-white shadow-inner border-2 border-blue-950/10 rounded-lg overflow-hidden cursor-crosshair">
+          <div
+            className="relative aspect-square w-full max-w-[512px] mx-auto shadow-inner border-2 border-blue-950/10 rounded-lg overflow-hidden cursor-crosshair"
+            style={{
+              // Checkerboard so transparent (deleted) areas are clearly visible.
+              backgroundColor: '#ffffff',
+              backgroundImage:
+                'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
+              backgroundSize: '16px 16px',
+              backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+            }}
+          >
             <canvas
               ref={canvasRef}
               width={CANVAS_SIZE}
@@ -423,6 +592,12 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
               onTouchMove={draw}
               onTouchEnd={stopDrawing}
               className="w-full h-full touch-none"
+            />
+            <canvas
+              ref={overlayRef}
+              width={CANVAS_SIZE}
+              height={CANVAS_SIZE}
+              className="absolute inset-0 w-full h-full pointer-events-none"
             />
           </div>
 
@@ -551,6 +726,52 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
                   </div>
                 </div>
               </div>
+
+              {tool === 'WAND' && (
+                <div className="flex flex-wrap items-end gap-x-6 gap-y-3 bg-blue-50 rounded-xl p-4 border border-blue-100">
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-mono text-blue-900/40 uppercase block">
+                      {t('sketchpad.tolerance')}: {tolerance}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={tolerance}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setTolerance(v);
+                        // Live update the active selection as the slider moves.
+                        if (lastWandRef.current) {
+                          magicWandSelect(lastWandRef.current.x, lastWandRef.current.y, v);
+                        }
+                      }}
+                      className="w-48 accent-blue-950 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={deleteSelection}
+                      disabled={!hasSelection}
+                      className="sketch-button bg-red-500 text-white font-bold px-4 py-2 text-xs flex items-center gap-2 disabled:opacity-30"
+                    >
+                      <Delete size={16} />
+                      {t('sketchpad.delete_selection')}
+                    </button>
+                    {hasSelection && (
+                      <button
+                        onClick={clearSelection}
+                        className="sketch-button bg-white text-blue-950 font-bold px-4 py-2 text-xs"
+                      >
+                        {t('sketchpad.deselect')}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-blue-900/40 max-w-[220px] leading-relaxed">
+                    {t('sketchpad.wand_hint')}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-3">
               <button onClick={onCancel} className="sketch-button bg-white text-blue-950 font-bold px-6">

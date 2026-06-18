@@ -47,8 +47,9 @@ export async function fetchPresetConfig(file: string, signal?: AbortSignal): Pro
     throw new Error(`Failed to load preset (${res.status})`);
   }
   const data = await res.json();
-  if (!isValidAppConfig(data)) {
+  if (!data || typeof data !== 'object') {
     throw new Error('Invalid preset configuration format');
   }
-  return normalizeAppConfig(data as AppConfig);
+  // Salvage whatever is usable rather than rejecting partially-valid presets.
+  return normalizeAppConfig(data);
 }

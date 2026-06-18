@@ -5,6 +5,27 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-06-18
+
+### Added
+
+- **Camera capture for assets** — every image slot in Settings (cargo, carriage, bonus, engine, wall, and all system assets) now has a **Camera** button next to **Upload**. It opens a live webcam preview (`getUserMedia`), captures a centered square frame, and routes it through the same crop editor as an upload. Includes a front/back camera toggle, retake/use-photo flow, and graceful handling of denied permission or missing devices. New component: `src/components/CameraCapture.tsx`.
+  - Requires a secure context (HTTPS or `localhost`) for camera access.
+- **Magic wand tool in the sketch pad** — select a contiguous region of similarly-colored pixels (RGBA distance) with an adjustable **similarity slider**, then **delete it to full transparency**. The selection is shown as a live marquee on a dedicated overlay layer, and a checkerboard backdrop makes transparent areas visible. Delete/Backspace removes the selection; Escape deselects.
+- **Kids mode is now included in import/export.** `AppConfig` gained an optional `kidsMode` field, so the kids-mode preference round-trips through config files and presets.
+- **Language switcher** — a small CS/EN toggle pinned to the top-right corner on every screen, switching the UI language via i18n (the choice is cached in `localStorage`). New component: `src/components/LanguageSwitcher.tsx`.
+- **Map search & scrollable list** — the menu's level list now has a name filter (search box with clear button) and is capped to about ten rows with an inner scrollbar, so large campaigns no longer stretch the page. Reorder arrows are hidden while a search filter is active.
+
+### Changed
+
+- **Exported config now records the real app version.** `handleExportConfig` writes the actual `package.json` version (injected at build time as `__APP_VERSION__` via Vite `define`) instead of a hardcoded `"1.0"`.
+- **Resilient configuration loading.** `localStorage` and JSON import no longer fail on malformed data — a new sanitization layer (`src/utils/configDefaults.ts`) salvages every valid element, drops invalid or unknown ones, rebuilds map grids to exact dimensions, and reports a summary of anything skipped. A single corrupt `localStorage` key no longer blocks the others, and partially-valid imports/presets load instead of being rejected outright.
+
+### Fixed
+
+- **Sketch-pad undo no longer destroys transparency** — undo now clears the canvas before redrawing the snapshot (instead of filling it white), so transparent regions survive.
+- **Saves are crash-safe** — `localStorage` writes are wrapped to catch `QuotaExceededError` (large base64 images can exceed the storage quota) and warn the user rather than throwing mid-edit.
+
 ## [1.4.0] - 2026-06-17
 
 ### Added
@@ -123,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.5.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.1.0...v1.2.0

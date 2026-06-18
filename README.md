@@ -6,12 +6,14 @@ Default UI language is Czech (`cs`); English (`en`) is also supported. An in-app
 
 ## Features
 
-- **Campaign mode** — play through a sequence of custom levels
+- **Campaign mode** — play through a sequence of custom levels, with a searchable, scrollable level list on the menu
 - **Map editor** — draw walls, place cargo, set start/gate, add moving car obstacles, and auto-generate paths
 - **Moving car obstacle** — a hazard that drives back and forth along a short road at half the train's speed and destroys the train on contact
-- **Custom assets** — emoji fallbacks, image upload/crop, or hand-drawn art for engines, walls, cargo, and system icons (including the car and road)
+- **Custom assets** — emoji fallbacks, image upload/crop, **camera capture**, or hand-drawn art for engines, walls, cargo, and system icons (including the car and road)
+- **Sketch pad with magic wand** — draw custom art and use the magic-wand tool to select similar colors and delete them to transparency
 - **Configurable cargo types** — engines, walls, cargo, and system icons
-- **Import / export** — back up or share full game configuration as JSON
+- **Bilingual UI** — Czech / English, switchable any time via a small CS/EN toggle in the top-right corner (i18n)
+- **Import / export** — back up or share full game configuration as JSON; import is resilient, salvaging valid data and skipping anything malformed
 
 ## Quick start
 
@@ -87,11 +89,13 @@ Game state is saved in the browser under these `localStorage` keys:
 
 - `train_logic_maps`
 - `train_logic_cargo`
+- `train_logic_bonus`
 - `train_logic_engines`
 - `train_logic_walls`
 - `train_logic_system`
+- `train_logic_kids_mode`
 
-Use **Settings → Export** to download a portable JSON config. Import it on another device or browser to restore levels and assets.
+Use **Settings → Export** to download a portable JSON config (maps, all assets, and the kids-mode preference). Import it on another device or browser to restore your setup. Loading is resilient: corrupt or partial data is salvaged where possible, with invalid entries skipped and reported.
 
 `data/defaultData.json` is a bundled sample config (maps with custom images). Import it from Settings if you want a pre-built starting point.
 
