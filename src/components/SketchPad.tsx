@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers, Wand2, Delete } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { SKETCH_LOGICAL_SIZE, SKETCH_DISPLAY_SIZE, SKETCH_PIXEL_UNIT, encodeCanvas } from '../utils/imageEncoding';
 
 interface SketchPadProps {
   onSave: (base64: string) => void;
@@ -12,7 +13,9 @@ interface SketchPadProps {
 }
 
 type Tool = 'PENCIL' | 'ERASER' | 'RECT' | 'CIRCLE' | 'LINE' | 'FILL' | 'WAND';
-type BrushSize = 2 | 4 | 8 | 12;
+// Brush widths are multiples of the 2x2 pixel unit so every stroke lands on the
+// coarse grid (2 = the minimum single "fat pixel").
+type BrushSize = 2 | 4 | 6 | 8;
 
 export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialImage, title }) => {
   const { t } = useTranslation();
@@ -48,7 +51,13 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     '#172554', '#000000', '#ef4444', '#22c55e', '#eab308', '#f97316', '#a855f7', '#78350f', '#ffffff'
   ];
 
-  const CANVAS_SIZE = 512;
+  // The canvas works at a small logical resolution (the stored asset size) but
+  // is displayed 4x larger, so the user paints chunky pixels on a big surface.
+  const CANVAS_SIZE = SKETCH_LOGICAL_SIZE; // 128
+  const PIXEL = SKETCH_PIXEL_UNIT; // 2 — drawing snaps to this grid
+
+  // Snap a logical coordinate down to the 2x2 drawing grid.
+  const snap = (v: number) => Math.floor(v / PIXEL) * PIXEL;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -56,13 +65,19 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Keep painted pixels crisp/blocky when the canvas is upscaled for display.
+    ctx.imageSmoothingEnabled = false;
+
     applyBackground(ctx);
 
     if (initialImage) {
       const img = new Image();
       img.src = initialImage;
       img.onload = () => {
+        // Smoothly fit an existing (possibly larger) asset down to the grid.
+        ctx.imageSmoothingEnabled = true;
         ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        ctx.imageSmoothingEnabled = false;
         saveToHistory();
       };
     } else {
@@ -98,7 +113,10 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
     if (paperTexture === 'GRAIN') {
-      for (let i = 0; i < 5000; i++) {
+      // Scale the speckle count with canvas area so density matches the look at
+      // the original 512px size.
+      const grainDots = Math.round(5000 * (CANVAS_SIZE * CANVAS_SIZE) / (512 * 512));
+      for (let i = 0; i < grainDots; i++) {
         const x = Math.random() * CANVAS_SIZE;
         const y = Math.random() * CANVAS_SIZE;
         const opacity = Math.random() * 0.05;
@@ -185,9 +203,11 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     const rect = canvas.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    // Snap to the 2x2 grid so every tool (pencil, shapes, fill, wand) operates
+    // in whole pixel units on the coarse canvas.
     return {
-      x: (clientX - rect.left) * (canvas.width / rect.width),
-      y: (clientY - rect.top) * (canvas.height / rect.height)
+      x: snap((clientX - rect.left) * (canvas.width / rect.width)),
+      y: snap((clientY - rect.top) * (canvas.height / rect.height))
     };
   };
 
@@ -222,6 +242,21 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     }
     ctx.stroke();
     ctx.globalAlpha = 1.0;
+  };
+
+  // Pencil/eraser drawing: stamp grid-aligned squares along the stroke so marks
+  // are crisp "fat pixels" rather than anti-aliased lines. `col` of '#ffffff'
+  // (eraser) paints the paper colour back over the artwork.
+  const stampLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, size: number, col: string) => {
+    ctx.fillStyle = col;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.hypot(dx, dy);
+    const steps = Math.max(1, Math.round(dist / PIXEL));
+    for (let i = 0; i <= steps; i++) {
+      const tt = steps ? i / steps : 0;
+      ctx.fillRect(snap(x1 + dx * tt), snap(y1 + dy * tt), size, size);
+    }
   };
 
   const floodFill = (ctx: CanvasRenderingContext2D, x: number, y: number, fillColor: string) => {
@@ -417,6 +452,11 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       if (!ctx) return;
       floodFill(ctx, pos.x, pos.y, color);
       saveToHistory();
+    } else if (tool === 'PENCIL' || tool === 'ERASER') {
+      // Stamp a single dot so a click without drag still marks the canvas.
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx) stampLine(ctx, pos.x, pos.y, pos.x, pos.y, brushSize, tool === 'ERASER' ? '#ffffff' : color);
     } else if (tool === 'RECT' || tool === 'CIRCLE' || tool === 'LINE') {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -436,19 +476,7 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     const currentPos = getPos(e);
 
     if (tool === 'PENCIL' || tool === 'ERASER') {
-      ctx.strokeStyle = tool === 'ERASER' ? '#ffffff' : color;
-      ctx.lineWidth = brushSize;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      if (tool === 'PENCIL') {
-        drawSketchyLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize);
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(startPos.x, startPos.y);
-        ctx.lineTo(currentPos.x, currentPos.y);
-        ctx.stroke();
-      }
+      stampLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize, tool === 'ERASER' ? '#ffffff' : color);
       setStartPos(currentPos);
     } else {
       // For shapes, repaint the base-layer snapshot synchronously (captured
@@ -514,7 +542,7 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
   const handleSave = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    onSave(canvas.toDataURL('image/png'));
+    onSave(encodeCanvas(canvas));
   };
 
   const clear = () => {
@@ -570,8 +598,10 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
           </div>
 
           <div
-            className="relative aspect-square w-full max-w-[512px] mx-auto shadow-inner border-2 border-blue-950/10 rounded-lg overflow-hidden cursor-crosshair"
+            className="relative aspect-square w-full mx-auto shadow-inner border-2 border-blue-950/10 rounded-lg overflow-hidden cursor-crosshair"
             style={{
+              // Display the small logical canvas 4x larger (chunky pixels).
+              maxWidth: SKETCH_DISPLAY_SIZE,
               // Checkerboard so transparent (deleted) areas are clearly visible.
               backgroundColor: '#ffffff',
               backgroundImage:
@@ -592,12 +622,14 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
               onTouchMove={draw}
               onTouchEnd={stopDrawing}
               className="w-full h-full touch-none"
+              style={{ imageRendering: 'pixelated' }}
             />
             <canvas
               ref={overlayRef}
               width={CANVAS_SIZE}
               height={CANVAS_SIZE}
               className="absolute inset-0 w-full h-full pointer-events-none"
+              style={{ imageRendering: 'pixelated' }}
             />
           </div>
 
@@ -684,13 +716,13 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
                 <div className="space-y-2">
                   <span className="text-[10px] font-mono text-blue-900/40 uppercase block">{t('sketchpad.brush_size')}</span>
                   <div className="flex gap-2">
-                    {[2, 4, 8, 12].map(size => (
+                    {[2, 4, 6, 8].map(size => (
                       <button
                         key={size}
                         onClick={() => setBrushSize(size as BrushSize)}
                         className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${brushSize === size ? 'border-blue-950 bg-blue-950 text-white' : 'border-blue-950/20 hover:border-blue-950'}`}
                       >
-                        <div className="bg-current rounded-full" style={{ width: size, height: size }} />
+                        <div className="bg-current" style={{ width: size * 2, height: size * 2 }} />
                       </button>
                     ))}
                   </div>

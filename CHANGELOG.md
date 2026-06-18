@@ -5,6 +5,18 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-06-18
+
+### Changed
+
+- **Asset images are now compressed at the source.** Every custom asset (uploaded photo, camera capture, or hand-drawn sketch) is downscaled to a 128×128 square and re-encoded as **WebP** (with a PNG fallback where WebP isn't supported) before being stored. Previously images were saved as full-resolution lossless PNG — a single photo crop could be several MB and overflow the ~5 MB `localStorage` quota. Typical assets drop from 36–139 KB to ~3–8 KB each (≈10–15× smaller). WebP keeps an alpha channel, so magic-wand transparency is preserved. New shared module: `src/utils/imageEncoding.ts`.
+- **Sketch pad is now a coarse pixel grid.** The drawing surface stays large (512px on screen) but works at the 128×128 asset resolution, displayed 4× larger with crisp (`pixelated`) rendering. All tools snap to a 2×2-pixel unit and the pencil/eraser stamp aligned blocks, so strokes stay clean at the stored resolution. Brush sizes are now multiples of the pixel unit (2/4/6/8).
+- **Crop editor outputs the final 128px WebP directly**, so both image upload and camera capture (which routes through the crop editor) are capped at the small size.
+
+### Added
+
+- **Import shrinks oversized legacy data.** Importing a config (or loading the bundled sample / a preset) now re-encodes every embedded image down to the compact 128px/WebP format on the way in. Because maps reference assets by id (no embedded images), this is a flat pass over the asset arrays. This is the migration path for configs saved before 1.6.0: **export and re-import** to compact existing data.
+
 ## [1.5.0] - 2026-06-18
 
 ### Added
@@ -144,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.6.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.2.0...v1.3.0

@@ -33,8 +33,8 @@ A client-side logic game where the player steers a train on a grid, collects car
 └─────────────────────────────────────────────────────────────────┘
 
 Supporting UI (modal overlays):
-  SketchPad ──► custom asset drawing + magic-wand transparency (base64 PNG)
-  CargoImageEditor ──► image upload crop (react-easy-crop)
+  SketchPad ──► coarse pixel-grid drawing + magic-wand transparency (128px WebP)
+  CargoImageEditor ──► image upload crop (react-easy-crop) → 128px WebP
   CameraCapture ──► live webcam capture (getUserMedia) → crop
 ```
 
@@ -79,6 +79,7 @@ Vlak/
         ├── canvasBackground.ts # Cached grid background canvas
         ├── configDefaults.ts   # Resilient sanitize/merge of imported & stored AppConfig
         ├── directionInput.ts   # 180° reversal guard for direction changes
+        ├── imageEncoding.ts    # Asset downscale + WebP encode (ASSET_SIZE, sketch geometry)
         └── imagePreload.ts     # Global image cache + preload helper
 ```
 
@@ -134,6 +135,8 @@ On first launch, if no saved maps exist, the app seeds a single level from `INIT
 **Resilient loading & saving** (`src/utils/configDefaults.ts`): both `localStorage` reads and JSON imports flow through `sanitizeAppConfig` / `sanitizeMaps`, which never throw. They salvage every valid element, drop invalid or unknown ones, rebuild map grids to an exact `width × height` matrix of valid cells, clamp out-of-range values, and return a summary of what was skipped (shown to the user on import). A single corrupt `localStorage` key is logged and ignored without blocking the others, and writes are wrapped to catch `QuotaExceededError` (large base64 images) instead of crashing.
 
 **Import/export**: `SettingsManager` triggers JSON download/upload of a full `AppConfig` (including the `kidsMode` preference). This is the same schema as `data/defaultData.json`. Preset loading uses the same resilient path, so partially-valid presets still load.
+
+**Asset image storage** (`src/utils/imageEncoding.ts`): all custom images are normalized to a 128×128 square (`ASSET_SIZE`) and encoded as **WebP** (`encodeCanvas`, with a PNG fallback detected at runtime) before being stored — keeping base64 payloads ~10–15× smaller than the previous lossless PNGs so they fit in the `localStorage` quota. The crop editor (`CargoImageEditor`) and sketch pad write at this size directly; on **import**, `compressConfigImages` (in `App.tsx`) re-encodes every embedded image via `normalizeAssetImage`, shrinking pre-1.6.0 configs and the bundled sample. Images live only in the top-level asset arrays — maps reference assets by id — so this is a flat pass with no per-cell image data.
 
 > **Note:** `data/defaultData.json` is not imported by the application at runtime. It serves as a bundled configuration snapshot (3 levels, all default assets with embedded base64 images). Use Settings → Import to load it, or reference it as a seed/template.
 
@@ -212,11 +215,11 @@ Tabbed asset manager:
 Asset input methods:
 
 - Emoji picker (`EMOJI_LIST` categories in `constants.ts`)
-- Image upload → crop (`CargoImageEditor`)
-- Camera capture → crop (`CameraCapture`, live webcam via `getUserMedia`; needs HTTPS or `localhost`)
-- Hand-draw (`SketchPad`) → saved as base64 PNG
+- Image upload → crop (`CargoImageEditor`) → 128px WebP
+- Camera capture → crop (`CameraCapture`, live webcam via `getUserMedia`; needs HTTPS or `localhost`) → 128px WebP
+- Hand-draw (`SketchPad`) → 128px WebP
 
-`SketchPad` also provides a **magic-wand** tool: it flood-selects a contiguous region of similarly-colored pixels (RGBA distance within an adjustable similarity threshold) and deletes the selection to full transparency, with a live selection overlay and a checkerboard backdrop so transparent areas are visible.
+`SketchPad` is a **coarse pixel-grid** editor: the canvas works at the 128×128 asset resolution but is displayed 4× larger with `image-rendering: pixelated`, and all input snaps to a 2×2-pixel unit (pencil/eraser stamp aligned blocks) so artwork stays crisp at the stored size. It also provides a **magic-wand** tool: it flood-selects a contiguous region of similarly-colored pixels (RGBA distance within an adjustable similarity threshold) and deletes the selection to full transparency, with a live selection overlay and a checkerboard backdrop so transparent areas are visible.
 
 Built-in defaults (coal, wood, gold, food, oil, etc.) cannot be deleted; custom entries can.
 

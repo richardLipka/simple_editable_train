@@ -9,8 +9,8 @@ Default UI language is Czech (`cs`); English (`en`) is also supported. An in-app
 - **Campaign mode** — play through a sequence of custom levels, with a searchable, scrollable level list on the menu
 - **Map editor** — draw walls, place cargo, set start/gate, add moving car obstacles, and auto-generate paths
 - **Moving car obstacle** — a hazard that drives back and forth along a short road at half the train's speed and destroys the train on contact
-- **Custom assets** — emoji fallbacks, image upload/crop, **camera capture**, or hand-drawn art for engines, walls, cargo, and system icons (including the car and road)
-- **Sketch pad with magic wand** — draw custom art and use the magic-wand tool to select similar colors and delete them to transparency
+- **Custom assets** — emoji fallbacks, image upload/crop, **camera capture**, or hand-drawn art for engines, walls, cargo, and system icons (including the car and road). All images are downscaled to 128×128 and stored as compact **WebP** so they stay small in browser storage
+- **Sketch pad with magic wand** — a coarse **pixel-grid** drawing surface (shown large, 4× zoomed) with a 2×2-pixel brush unit; use the magic-wand tool to select similar colors and delete them to transparency
 - **Configurable cargo types** — engines, walls, cargo, and system icons
 - **Bilingual UI** — Czech / English, switchable any time via a small CS/EN toggle in the top-right corner (i18n)
 - **Import / export** — back up or share full game configuration as JSON; import is resilient, salvaging valid data and skipping anything malformed
@@ -96,6 +96,8 @@ Game state is saved in the browser under these `localStorage` keys:
 - `train_logic_kids_mode`
 
 Use **Settings → Export** to download a portable JSON config (maps, all assets, and the kids-mode preference). Import it on another device or browser to restore your setup. Loading is resilient: corrupt or partial data is salvaged where possible, with invalid entries skipped and reported.
+
+Asset images are kept small to stay within the browser storage quota: every custom image is downscaled to 128×128 and stored as **WebP** (PNG fallback). Import also re-compresses any oversized images it finds, so a config saved by an older version shrinks automatically — **export and re-import** to compact existing data.
 
 `data/defaultData.json` is a bundled sample config (maps with custom images). Import it from Settings if you want a pre-built starting point.
 

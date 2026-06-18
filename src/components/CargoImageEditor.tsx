@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import Cropper, { Point, Area } from 'react-easy-crop';
 import { X, Check, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ASSET_SIZE, encodeCanvas } from '../utils/imageEncoding';
 
 interface CargoImageEditorProps {
   image: string;
@@ -53,8 +54,13 @@ export const CargoImageEditor: React.FC<CargoImageEditorProps> = ({
 
     if (!ctx) return '';
 
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
+    // Render the crop straight into a small square so the stored asset stays
+    // tiny (a full-resolution PNG of a photo crop could be several MB and blow
+    // the localStorage quota on its own). Encoded as WebP via encodeCanvas.
+    canvas.width = ASSET_SIZE;
+    canvas.height = ASSET_SIZE;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     ctx.drawImage(
       image,
@@ -64,11 +70,11 @@ export const CargoImageEditor: React.FC<CargoImageEditorProps> = ({
       pixelCrop.height,
       0,
       0,
-      pixelCrop.width,
-      pixelCrop.height
+      ASSET_SIZE,
+      ASSET_SIZE
     );
 
-    return canvas.toDataURL('image/png');
+    return encodeCanvas(canvas);
   };
 
   const handleSave = async () => {

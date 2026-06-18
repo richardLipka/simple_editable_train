@@ -4,6 +4,7 @@ import { GameMap, CargoType, BonusType, EngineType, WallType, AppConfig, SystemA
 import { INITIAL_MAP, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES, DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_SYSTEM_ASSETS } from './constants';
 import { mergeBonusTypes, mergeCargoTypes, sanitizeAppConfig, sanitizeEngines, sanitizeWalls, sanitizeMaps, sanitizeSystemAssets } from './utils/configDefaults';
 import { clearImageCache } from './utils/imagePreload';
+import { normalizeAssetImage } from './utils/imageEncoding';
 import { Play } from './components/Play';
 import { Editor } from './components/Editor';
 import { SettingsManager } from './components/SettingsManager';
@@ -11,6 +12,47 @@ import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { TrainFront, Map as MapIcon, Plus, Trash2, Play as PlayIcon, ChevronUp, ChevronDown, PackagePlus, Settings, Baby, Info, X, ExternalLink, Github, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import favLogo from './assets/fav_logo.png';
+
+// Re-encode every embedded asset image down to the compact ASSET_SIZE/WebP
+// format used by new assets. Legacy configs and the bundled sample can carry
+// multi-hundred-KB PNGs that overflow localStorage; this shrinks them on
+// import. Images live only in the top-level asset arrays — maps reference
+// assets by id — so this is a flat pass. A failure on any single image keeps
+// the original rather than dropping it.
+async function compressConfigImages(config: AppConfig): Promise<AppConfig> {
+  const safe = async (src?: string): Promise<string | undefined> => {
+    if (!src || !src.startsWith('data:')) return src;
+    try {
+      return await normalizeAssetImage(src, { fit: 'contain' });
+    } catch {
+      return src;
+    }
+  };
+  const s = config.systemAssets;
+  const [engines, walls, cargoTypes, bonusTypes, systemImages] = await Promise.all([
+    Promise.all(config.engines.map(async (e) => ({ ...e, image: await safe(e.image) }))),
+    Promise.all(config.walls.map(async (w) => ({ ...w, image: await safe(w.image) }))),
+    Promise.all(config.cargoTypes.map(async (c) => ({
+      ...c,
+      cargoImage: await safe(c.cargoImage),
+      carriageImage: await safe(c.carriageImage),
+    }))),
+    Promise.all((config.bonusTypes ?? []).map(async (b) => ({ ...b, image: await safe(b.image) }))),
+    Promise.all([
+      safe(s.startImage), safe(s.gateOpenImage), safe(s.gateClosedImage), safe(s.randomCargoImage),
+      safe(s.carObstacleImage), safe(s.roadMidImage), safe(s.roadEdgeImage),
+    ]),
+  ]);
+  const [startImage, gateOpenImage, gateClosedImage, randomCargoImage, carObstacleImage, roadMidImage, roadEdgeImage] = systemImages;
+  return {
+    ...config,
+    engines,
+    walls,
+    cargoTypes,
+    bonusTypes,
+    systemAssets: { ...s, startImage, gateOpenImage, gateClosedImage, randomCargoImage, carObstacleImage, roadMidImage, roadEdgeImage },
+  };
+}
 
 export default function App() {
   const { t } = useTranslation();
@@ -152,9 +194,11 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportConfig = (raw: unknown) => {
+  const handleImportConfig = async (raw: unknown) => {
     clearImageCache();
-    const { config, summary } = sanitizeAppConfig(raw);
+    const { config: sanitized, summary } = sanitizeAppConfig(raw);
+    // Shrink any oversized legacy images before they hit localStorage.
+    const config = await compressConfigImages(sanitized);
 
     saveMaps(config.maps.length ? config.maps : [INITIAL_MAP]);
     saveEngines(config.engines);
