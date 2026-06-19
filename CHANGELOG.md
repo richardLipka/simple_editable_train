@@ -5,6 +5,12 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-06-19
+
+### Added
+
+- **URL preset parameter** — appending `?preset=<id>` to the app URL auto-loads the matching preset on startup (e.g. `https://…/vlak/?preset=klatovy`). The preset ID must match an `id` field in `data/presets.json`. After loading, the parameter is removed from the URL so a subsequent page reload does not overwrite the user's edits. Useful for sharing a direct link that opens a specific campaign.
+
 ## [1.7.1] - 2026-06-19
 
 ### Fixed
@@ -186,6 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.7.2]: https://github.com/richardLipka/simple_editable_train/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/richardLipka/simple_editable_train/compare/v1.7.0...v1.7.1
 [1.6.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.4.0...v1.5.0

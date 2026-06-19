@@ -4,6 +4,7 @@ import { GameMap, CargoType, BonusType, EngineType, WallType, AppConfig, SystemA
 import { INITIAL_MAP, DEFAULT_CARGO_TYPES, DEFAULT_BONUS_TYPES, DEFAULT_ENGINES, DEFAULT_WALLS, DEFAULT_SYSTEM_ASSETS } from './constants';
 import { mergeBonusTypes, mergeCargoTypes, sanitizeAppConfig, sanitizeEngines, sanitizeWalls, sanitizeMaps, sanitizeSystemAssets } from './utils/configDefaults';
 import { clearImageCache } from './utils/imagePreload';
+import { fetchPresetsManifest, fetchPresetConfig } from './services/configService';
 import { normalizeAssetImage } from './utils/imageEncoding';
 import { Play } from './components/Play';
 import { Editor } from './components/Editor';
@@ -113,8 +114,44 @@ export default function App() {
       if (savedSystem !== undefined) setSystemAssets(sanitizeSystemAssets(savedSystem));
     };
 
-    const id = window.setTimeout(loadSaved, 0);
-    return () => window.clearTimeout(id);
+    const controller = new AbortController();
+
+    const run = async () => {
+      // Defer past first paint, then restore localStorage.
+      await new Promise<void>(resolve => { window.setTimeout(resolve, 0); });
+      if (controller.signal.aborted) return;
+      loadSaved();
+
+      // Auto-load a preset when the URL contains ?preset=<id>.
+      const presetId = new URLSearchParams(window.location.search).get('preset');
+      if (!presetId) return;
+
+      try {
+        const manifest = await fetchPresetsManifest(controller.signal);
+        const entry = manifest.presets.find(p => p.id === presetId);
+        if (!entry) return;
+
+        const config = await fetchPresetConfig(entry.file, controller.signal);
+        const compressed = await compressConfigImages(config);
+        clearImageCache();
+        saveMaps(compressed.maps.length ? compressed.maps : [INITIAL_MAP]);
+        saveEngines(compressed.engines);
+        saveWalls(compressed.walls);
+        saveCargo(compressed.cargoTypes);
+        saveBonus(compressed.bonusTypes ?? DEFAULT_BONUS_TYPES);
+        saveSystemAssets(compressed.systemAssets);
+        if (typeof compressed.kidsMode === 'boolean') saveKidsMode(compressed.kidsMode);
+
+        // Strip ?preset= so a reload doesn't re-apply it over the user's edits.
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        console.error('Failed to auto-load preset from URL', err);
+      }
+    };
+
+    run();
+    return () => controller.abort();
   }, []);
 
   // Persist a value without ever throwing into a React handler. Large base64
