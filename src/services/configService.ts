@@ -28,8 +28,18 @@ export function isValidAppConfig(value: unknown): value is AppConfig {
   );
 }
 
+// Preset files live on the server and are meant to be edited/replaced there by
+// the deployer. Fetch them with caching fully disabled (no-store + a per-request
+// cache-busting query) so an updated file is always picked up immediately. Without
+// this, a browser or CDN can serve a stale copy: the load "succeeds" but brings in
+// old/empty data, while Import-from-file (which reads the chosen local file, never
+// the network) keeps working — exactly the symptom that surfaced on deploy.
+function noCache(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+}
+
 export async function fetchPresetsManifest(signal?: AbortSignal): Promise<PresetsManifest> {
-  const res = await fetch(`${DATA_BASE}/presets.json`, { signal });
+  const res = await fetch(noCache(`${DATA_BASE}/presets.json`), { signal, cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to load presets manifest (${res.status})`);
   }
@@ -42,7 +52,7 @@ export async function fetchPresetsManifest(signal?: AbortSignal): Promise<Preset
 
 export async function fetchPresetConfig(file: string, signal?: AbortSignal): Promise<AppConfig> {
   const sanitized = file.replace(/^\/+/, '').replace(/\.\./g, '');
-  const res = await fetch(`${DATA_BASE}/${sanitized}`, { signal });
+  const res = await fetch(noCache(`${DATA_BASE}/${sanitized}`), { signal, cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to load preset (${res.status})`);
   }

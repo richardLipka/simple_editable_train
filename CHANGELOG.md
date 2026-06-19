@@ -5,6 +5,12 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-06-19
+
+### Fixed
+
+- **"Načíst přednastavení" (Load Preset) ignored on deployment** — preset JSON files were fetched with the browser's default cache policy. A browser or CDN that had cached a previous version served the stale copy on reload while the load appeared to succeed — resulting in the old/empty data being applied. `Import from file` was unaffected because it reads the chosen local file via `FileReader` and never touches the network. Fix: both `fetchPresetsManifest` and `fetchPresetConfig` now pass `cache: 'no-store'` and append a per-request `?t=<timestamp>` cache-busting query, so an updated server file is always picked up immediately.
+
 ## [1.7.0] - 2026-06-19
 
 ### Added
@@ -180,6 +186,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSCAD carriage export from the play screen
 - Czech (default) and English UI via i18next
 
+[1.7.1]: https://github.com/richardLipka/simple_editable_train/compare/v1.7.0...v1.7.1
 [1.6.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/richardLipka/simple_editable_train/compare/v1.3.0...v1.4.0
