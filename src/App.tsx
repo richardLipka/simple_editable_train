@@ -379,14 +379,14 @@ export default function App() {
               <Settings size={18} />
               {t('app.settings')}
             </button>
-            <button 
+            <button
               onClick={() => setMode('CARGO_CONFIG')}
               className="sketch-button flex items-center gap-2 text-sm bg-white"
             >
               <PackagePlus size={18} />
               {t('app.cargo_types')}
             </button>
-            <button 
+            <button
               onClick={handleCreateMap}
               className="sketch-button flex items-center gap-2 text-sm bg-blue-950 text-white"
             >
@@ -576,9 +576,13 @@ export default function App() {
                 </div>
 
                 <div className="sketch-card flex flex-col items-center text-center bg-blue-50/30">
-                  <div className="w-20 h-20 bg-blue-950 text-white sketch-border flex items-center justify-center mb-6">
+                  <button
+                    onClick={() => { setCurrentMapIndex(0); setMode('PLAY'); }}
+                    className="w-20 h-20 bg-blue-950 text-white sketch-border flex items-center justify-center mb-6 hover:bg-blue-800 transition-colors"
+                    aria-label={t('app.start_campaign')}
+                  >
                     <PlayIcon size={32} fill="currentColor" />
-                  </div>
+                  </button>
                   <h3 className="text-2xl font-bold mb-2">{t('app.start_campaign')}</h3>
                   <p className="text-blue-900/60 text-sm mb-8 leading-relaxed">
                     {t('app.campaign_desc')}

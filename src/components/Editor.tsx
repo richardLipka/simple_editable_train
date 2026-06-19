@@ -73,6 +73,7 @@ export const Editor: React.FC<EditorProps> = ({ map: initialMap, cargoTypes, bon
       collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, bonusTypes, {
         includeCarriageImages: false,
       }),
+      { prune: true },
     ).then(() => draw());
   }, [cargoTypes, engines, walls, systemAssets]);
 

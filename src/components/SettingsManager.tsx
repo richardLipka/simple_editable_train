@@ -1034,11 +1034,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('startEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'start')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'start' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'start')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'start', initial: systemAssets.startImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('startEmoji')} />
                   </div>
                 </div>
               </div>
@@ -1056,11 +1056,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('randomCargoEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'randomCargo')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'randomCargo' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'randomCargo')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'randomCargo', initial: systemAssets.randomCargoImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('randomCargoEmoji')} />
                   </div>
                 </div>
               </div>
@@ -1078,11 +1078,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('gateOpenEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'gateOpen')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'gateOpen' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'gateOpen')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'gateOpen', initial: systemAssets.gateOpenImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('gateOpenEmoji')} />
                   </div>
                 </div>
               </div>
@@ -1100,11 +1100,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('gateClosedEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'gateClosed')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'gateClosed' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'gateClosed')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'gateClosed', initial: systemAssets.gateClosedImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('gateClosedEmoji')} />
                   </div>
                 </div>
               </div>
@@ -1122,11 +1122,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1 space-y-2">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('carObstacleEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'carObstacle')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'carObstacle' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'carObstacle')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'carObstacle', initial: systemAssets.carObstacleImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('carObstacleEmoji')} />
                   </div>
                   <p className="text-[10px] text-blue-900/40">{t('settings.car_obstacle_hint')}</p>
                 </div>
@@ -1145,11 +1145,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1 space-y-2">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('roadMidEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'roadMid')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'roadMid' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'roadMid')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'roadMid', initial: systemAssets.roadMidImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('roadMidEmoji')} />
                   </div>
                   <p className="text-[10px] text-blue-900/40">{t('settings.road_mid_hint')}</p>
                 </div>
@@ -1168,11 +1168,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
                   )}
                 </div>
                 <div className="flex-1 space-y-2">
-                  <div className="flex gap-2">
-                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('roadEdgeEmoji')} />
-                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'roadEdge')} />
+                  <div className="grid grid-cols-2 gap-2">
                     <ActionIconButton icon={<Camera size={14} />} label={t('settings.camera')} onClick={() => setCapturing({ type: 'roadEdge' })} />
+                    <UploadIconButton label={t('settings.upload')} onChange={e => handleImageUpload(e, 'roadEdge')} />
                     <ActionIconButton icon={<Pencil size={14} />} label={t('settings.draw')} onClick={() => setSketching({ type: 'roadEdge', initial: systemAssets.roadEdgeImage })} />
+                    <ActionIconButton icon={<Smile size={14} />} label={t('settings.emoji')} onClick={() => setPickingEmoji('roadEdgeEmoji')} />
                   </div>
                   <p className="text-[10px] text-blue-900/40">{t('settings.road_edge_hint')}</p>
                 </div>

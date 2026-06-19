@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers, Wand2, Delete } from 'lucide-react';
+import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers, Wand2, Delete, Sun } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SKETCH_LOGICAL_SIZE, SKETCH_DISPLAY_SIZE, SKETCH_PIXEL_UNIT, encodeCanvas } from '../utils/imageEncoding';
 
@@ -12,7 +12,7 @@ interface SketchPadProps {
   title?: string;
 }
 
-type Tool = 'PENCIL' | 'ERASER' | 'RECT' | 'CIRCLE' | 'LINE' | 'FILL' | 'WAND';
+type Tool = 'PENCIL' | 'ERASER' | 'RECT' | 'CIRCLE' | 'LINE' | 'FILL' | 'WAND' | 'BRIGHTNESS';
 // Brush widths are multiples of the 2x2 pixel unit so every stroke lands on the
 // coarse grid (2 = the minimum single "fat pixel").
 type BrushSize = 2 | 4 | 6 | 8;
@@ -32,6 +32,11 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
   // Remember the last wand click so dragging the slider re-runs the selection
   // live without needing the user to click again.
   const lastWandRef = useRef<{ x: number; y: number } | null>(null);
+  // Brightness enhancement (gamma correction): slider 0-100% and an immutable
+  // snapshot of the image taken when the tool is selected. The slider previews
+  // off this baseline so dragging never compounds; "Apply" commits the result.
+  const [brightness, setBrightness] = useState(0);
+  const brightnessBaseRef = useRef<ImageData | null>(null);
   const [brushSize, setBrushSize] = useState<BrushSize>(4);
   const [color, setColor] = useState('#172554');
   const [fillColor, setFillColor] = useState('#ffffff');
@@ -68,12 +73,14 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     // Keep painted pixels crisp/blocky when the canvas is upscaled for display.
     ctx.imageSmoothingEnabled = false;
 
-    applyBackground(ctx);
-
     if (initialImage) {
+      // Don't paint the white paper behind an existing asset: that would turn
+      // its transparent regions opaque on screen and bake white in on the next
+      // save. Start from the transparent canvas so transparency survives.
       const img = new Image();
       img.src = initialImage;
       img.onload = () => {
+        ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
         // Smoothly fit an existing (possibly larger) asset down to the grid.
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
@@ -81,6 +88,8 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
         saveToHistory();
       };
     } else {
+      // Brand-new drawing: lay down the opaque paper to draw on.
+      applyBackground(ctx);
       saveToHistory();
     }
   }, []);
@@ -245,17 +254,21 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
   };
 
   // Pencil/eraser drawing: stamp grid-aligned squares along the stroke so marks
-  // are crisp "fat pixels" rather than anti-aliased lines. `col` of '#ffffff'
-  // (eraser) paints the paper colour back over the artwork.
-  const stampLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, size: number, col: string) => {
-    ctx.fillStyle = col;
+  // are crisp "fat pixels" rather than anti-aliased lines. When `erase` is set
+  // (the eraser tool, or a transparent stroke colour) the squares are cleared to
+  // full transparency — revealing the checkerboard — instead of painting `col`.
+  const stampLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, size: number, col: string, erase = false) => {
+    if (!erase) ctx.fillStyle = col;
     const dx = x2 - x1;
     const dy = y2 - y1;
     const dist = Math.hypot(dx, dy);
     const steps = Math.max(1, Math.round(dist / PIXEL));
     for (let i = 0; i <= steps; i++) {
       const tt = steps ? i / steps : 0;
-      ctx.fillRect(snap(x1 + dx * tt), snap(y1 + dy * tt), size, size);
+      const sx = snap(x1 + dx * tt);
+      const sy = snap(y1 + dy * tt);
+      if (erase) ctx.clearRect(sx, sy, size, size);
+      else ctx.fillRect(sx, sy, size, size);
     }
   };
 
@@ -269,12 +282,15 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     const targetB = data[targetPos + 2];
     const targetA = data[targetPos + 3];
 
-    // Convert hex to RGB
-    const r = parseInt(fillColor.slice(1, 3), 16);
-    const g = parseInt(fillColor.slice(3, 5), 16);
-    const b = parseInt(fillColor.slice(5, 7), 16);
+    // A transparent fill colour floods the region to full transparency (alpha 0);
+    // any other colour is converted from hex to opaque RGB.
+    const erase = fillColor === 'transparent';
+    const r = erase ? 0 : parseInt(fillColor.slice(1, 3), 16);
+    const g = erase ? 0 : parseInt(fillColor.slice(3, 5), 16);
+    const b = erase ? 0 : parseInt(fillColor.slice(5, 7), 16);
+    const a = erase ? 0 : 255;
 
-    if (targetR === r && targetG === g && targetB === b && targetA === 255) return;
+    if (targetR === r && targetG === g && targetB === b && targetA === a) return;
 
     const stack: [number, number][] = [[Math.floor(x), Math.floor(y)]];
     
@@ -288,7 +304,7 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       data[pos] = r;
       data[pos+1] = g;
       data[pos+2] = b;
-      data[pos+3] = 255;
+      data[pos+3] = a;
 
       stack.push([curX + 1, curY], [curX - 1, curY], [curX, curY + 1], [curX, curY - 1]);
     }
@@ -411,8 +427,84 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     saveToHistory();
   };
 
+  // ---- Brightness enhancement (gamma correction) ---------------------------
+
+  // Snapshot the current canvas as the baseline the slider previews against.
+  const captureBrightnessBase = () => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    brightnessBaseRef.current = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  };
+
+  // Slider s (0-100) → gamma (1.0 at 0%, 0.35 at 100%). Brightens shadows and
+  // midtones much more than highlights for a natural-looking lift; the lower
+  // floor lets the top of the slider strongly rescue very dark images.
+  //
+  // The gamma is applied to each pixel's HSV "value" (its max channel), and all
+  // three channels are then scaled by that same factor. Uniform scaling leaves
+  // hue and saturation untouched — only brightness changes — so colours stay
+  // vivid instead of washing out the way per-channel gamma does. Because the
+  // scale factor is value_new / value_max, the largest channel lands on
+  // value_new (≤255) and no channel can overflow, so no clamping is needed.
+  // Alpha is left untouched, so magic-wand transparency survives.
+  const previewBrightness = (s: number) => {
+    const base = brightnessBaseRef.current;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!base || !ctx) return;
+    const gamma = 1.0 - 0.65 * (s / 100);
+    // Gamma curve for a single 0-255 value, precomputed once per slider change.
+    const lut = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      lut[i] = 255 * Math.pow(i / 255, gamma);
+    }
+    const out = ctx.createImageData(CANVAS_SIZE, CANVAS_SIZE);
+    const src = base.data;
+    const dst = out.data; // Uint8ClampedArray: float writes auto-round & clamp
+    for (let i = 0; i < src.length; i += 4) {
+      const r = src[i];
+      const g = src[i + 1];
+      const b = src[i + 2];
+      const v = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      if (v > 0) {
+        const k = lut[v] / v;
+        dst[i] = r * k;
+        dst[i + 1] = g * k;
+        dst[i + 2] = b * k;
+      }
+      dst[i + 3] = src[i + 3];
+    }
+    ctx.putImageData(out, 0, 0);
+  };
+
+  // Commit the previewed result to history, then re-baseline at 0% so further
+  // adjustments build on the brightened image instead of doubling up.
+  const applyBrightness = () => {
+    if (!brightnessBaseRef.current || brightness === 0) return;
+    saveToHistory();
+    captureBrightnessBase();
+    setBrightness(0);
+  };
+
+  // Discard an unapplied preview: repaint the baseline and zero the slider.
+  const resetBrightness = () => {
+    const base = brightnessBaseRef.current;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (base && ctx) ctx.putImageData(base, 0, 0);
+    setBrightness(0);
+  };
+
   const selectTool = (newTool: Tool) => {
     if (newTool !== 'WAND') clearSelection();
+    // Leaving brightness without applying reverts the live preview.
+    if (tool === 'BRIGHTNESS' && newTool !== 'BRIGHTNESS') {
+      resetBrightness();
+      brightnessBaseRef.current = null;
+    }
+    // Entering brightness snapshots the current image as the baseline.
+    if (newTool === 'BRIGHTNESS') {
+      setBrightness(0);
+      captureBrightnessBase();
+    }
     setTool(newTool);
   };
 
@@ -442,6 +534,9 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       return;
     }
 
+    // Brightness is a slider-driven global adjustment; the canvas isn't drawable.
+    if (tool === 'BRIGHTNESS') return;
+
     setStartPos(pos);
     setIsDrawing(true);
 
@@ -456,7 +551,8 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       // Stamp a single dot so a click without drag still marks the canvas.
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
-      if (ctx) stampLine(ctx, pos.x, pos.y, pos.x, pos.y, brushSize, tool === 'ERASER' ? '#ffffff' : color);
+      const erasing = tool === 'ERASER' || color === 'transparent';
+      if (ctx) stampLine(ctx, pos.x, pos.y, pos.x, pos.y, brushSize, color, erasing);
     } else if (tool === 'RECT' || tool === 'CIRCLE' || tool === 'LINE') {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -476,7 +572,8 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     const currentPos = getPos(e);
 
     if (tool === 'PENCIL' || tool === 'ERASER') {
-      stampLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize, tool === 'ERASER' ? '#ffffff' : color);
+      const erasing = tool === 'ERASER' || color === 'transparent';
+      stampLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize, color, erasing);
       setStartPos(currentPos);
     } else {
       // For shapes, repaint the base-layer snapshot synchronously (captured
@@ -485,8 +582,12 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       if (!shapeBaseRef.current) return;
       ctx.putImageData(shapeBaseRef.current, 0, 0);
 
-      ctx.strokeStyle = color;
-      ctx.fillStyle = getFillPattern(ctx, fillTexture, fillColor);
+      // A transparent stroke colour turns the shape into an eraser: drawing in
+      // 'destination-out' subtracts alpha wherever the shape would paint.
+      const erasing = color === 'transparent';
+      ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = erasing ? '#000' : color;
+      ctx.fillStyle = erasing ? '#000' : getFillPattern(ctx, fillTexture, fillColor);
       ctx.lineWidth = brushSize;
       ctx.lineCap = 'round';
 
@@ -529,6 +630,9 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
       } else if (tool === 'LINE') {
         drawSketchyLine(ctx, startPos.x, startPos.y, currentPos.x, currentPos.y, brushSize);
       }
+
+      // Restore the default so the next stroke / snapshot isn't an eraser.
+      ctx.globalCompositeOperation = 'source-over';
     }
   };
 
@@ -580,6 +684,7 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
           <ToolButton active={tool === 'LINE'} onClick={() => selectTool('LINE')} icon={<Minus size={20} />} label={t('sketchpad.line')} />
           <ToolButton active={tool === 'FILL'} onClick={() => selectTool('FILL')} icon={<PaintBucket size={20} />} label={t('sketchpad.fill')} />
           <ToolButton active={tool === 'WAND'} onClick={() => selectTool('WAND')} icon={<Wand2 size={20} />} label={t('sketchpad.magic_wand')} />
+          <ToolButton active={tool === 'BRIGHTNESS'} onClick={() => selectTool('BRIGHTNESS')} icon={<Sun size={20} />} label={t('sketchpad.brightness')} />
           <div className="h-px bg-blue-200 my-2 hidden md:block" />
           <ToolButton active={false} onClick={undo} icon={<Undo2 size={20} />} label={t('sketchpad.undo')} disabled={history.length <= 1} />
           <ToolButton active={false} onClick={clear} icon={<Trash2 size={20} />} label={t('sketchpad.clear')} />
@@ -639,12 +744,25 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
                 <div className="space-y-2">
                   <span className="text-[10px] font-mono text-blue-900/40 uppercase block">{t('sketchpad.stroke_color')}</span>
                   <div className="flex items-center gap-1.5">
-                    <div 
-                      className="w-8 h-8 rounded-lg border-2 border-blue-950 shadow-sm mr-2 flex items-center justify-center"
-                      style={{ backgroundColor: color }}
+                    <div
+                      className="w-8 h-8 rounded-lg border-2 border-blue-950 shadow-sm mr-2 flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: color === 'transparent' ? 'transparent' : color }}
                     >
-                      <div className="w-1 h-1 bg-white rounded-full opacity-50" />
+                      {color === 'transparent' ? (
+                        <div className="w-full h-full bg-white relative">
+                          <div className="absolute inset-0 border-t-2 border-red-500 rotate-45 origin-center" />
+                        </div>
+                      ) : (
+                        <div className="w-1 h-1 bg-white rounded-full opacity-50" />
+                      )}
                     </div>
+                    <button
+                      onClick={() => setColor('transparent')}
+                      title={t('sketchpad.transparent')}
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${color === 'transparent' ? 'border-blue-950 scale-125 z-10' : 'border-blue-950/20 hover:scale-110'}`}
+                    >
+                      <X size={12} className="text-red-500" />
+                    </button>
                     <button
                       onClick={() => setColor('#94a3b8')}
                       className={`w-6 h-6 rounded-full border-2 transition-all ${color === '#94a3b8' ? 'border-blue-950 scale-125 z-10' : 'border-transparent hover:scale-110'}`}
@@ -660,9 +778,9 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
                     ))}
                     <div className="relative w-6 h-6 rounded-full border-2 border-blue-950/20 overflow-hidden hover:border-blue-950 transition-colors">
                       <Palette size={14} className="absolute inset-0 m-auto text-blue-900/40 pointer-events-none" />
-                      <input 
-                        type="color" 
-                        value={color} 
+                      <input
+                        type="color"
+                        value={color === 'transparent' ? '#172554' : color}
                         onChange={e => setColor(e.target.value)}
                         className="absolute inset-0 opacity-0 cursor-pointer scale-150"
                       />
@@ -801,6 +919,49 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
                   </div>
                   <p className="text-[10px] text-blue-900/40 max-w-[220px] leading-relaxed">
                     {t('sketchpad.wand_hint')}
+                  </p>
+                </div>
+              )}
+
+              {tool === 'BRIGHTNESS' && (
+                <div className="flex flex-wrap items-end gap-x-6 gap-y-3 bg-blue-50 rounded-xl p-4 border border-blue-100">
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-mono text-blue-900/40 uppercase block">
+                      {t('sketchpad.brightness')}: {brightness}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={brightness}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setBrightness(v);
+                        // Live preview off the immutable baseline (no compounding).
+                        previewBrightness(v);
+                      }}
+                      className="w-48 accent-blue-950 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={applyBrightness}
+                      disabled={brightness === 0}
+                      className="sketch-button bg-blue-950 text-white font-bold px-4 py-2 text-xs flex items-center gap-2 disabled:opacity-30"
+                    >
+                      <Sun size={16} />
+                      {t('sketchpad.apply')}
+                    </button>
+                    <button
+                      onClick={resetBrightness}
+                      disabled={brightness === 0}
+                      className="sketch-button bg-white text-blue-950 font-bold px-4 py-2 text-xs disabled:opacity-30"
+                    >
+                      {t('sketchpad.reset')}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-blue-900/40 max-w-[220px] leading-relaxed">
+                    {t('sketchpad.brightness_hint')}
                   </p>
                 </div>
               )}

@@ -44,7 +44,8 @@
     "controls_hint": "ARROWS TO STEER • SPACE/P TO PAUSE • M(+) / N(-) SPEED",
     "gate_hint": "Collect all gifts first!",
     "show_path_hint": "Show Path Hint",
-    "hide_path_hint": "Hide Path Hint"
+    "hide_path_hint": "Hide Path Hint",
+    "go": "GO!"
   },
   "editor": {
     "title": "Map Editor",
@@ -219,11 +220,16 @@
     "delete_selection": "Delete to Transparent",
     "deselect": "Deselect",
     "wand_hint": "Click an area to select similar adjacent colors, then delete it to transparency. Use the slider to widen the match.",
+    "brightness": "Brightness Enhancement",
+    "brightness_hint": "Brightens shadows and midtones (gamma) while keeping colours vivid and highlights intact — great for dark or underexposed photos. Apply to commit.",
+    "apply": "Apply",
+    "reset": "Reset",
     "undo": "Undo",
     "clear": "Clear",
     "brush_size": "Brush Size",
     "stroke_color": "Stroke Color",
     "fill_color": "Fill Color",
+    "transparent": "Transparent (erase)",
     "paper_texture": "Paper Texture",
     "fill_texture": "Fill Texture",
     "texture_none": "NONE",

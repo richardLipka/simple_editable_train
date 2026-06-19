@@ -44,7 +44,8 @@
     "controls_hint": "ŠIPKY K ŘÍZENÍ • MEZERNÍK/P PRO PAUZU • M(+) / N(-) RYCHLOST",
     "gate_hint": "Nejdřív seber všechny dárky!",
     "show_path_hint": "Zobrazit nápovědu cesty",
-    "hide_path_hint": "Skrýt nápovědu cesty"
+    "hide_path_hint": "Skrýt nápovědu cesty",
+    "go": "JEĎ!"
   },
   "editor": {
     "title": "Editor map",
@@ -219,11 +220,16 @@
     "delete_selection": "Smazat do průhledna",
     "deselect": "Zrušit výběr",
     "wand_hint": "Klikněte na oblast pro výběr podobných sousedních barev a poté ji smažte do průhledna. Posuvníkem rozšíříte shodu.",
+    "brightness": "Zesvětlení",
+    "brightness_hint": "Zesvětlí stíny a střední tóny (gama), zachová sytost barev i světlé části — ideální pro tmavé nebo podexponované fotky. Potvrďte tlačítkem Použít.",
+    "apply": "Použít",
+    "reset": "Vrátit",
     "undo": "Zpět",
     "clear": "Vymazat",
     "brush_size": "Velikost štětce",
     "stroke_color": "Barva obrysu",
     "fill_color": "Barva výplně",
+    "transparent": "Průhledná (guma)",
     "paper_texture": "Textura papíru",
     "fill_texture": "Textura výplně",
     "texture_none": "ŽÁDNÁ",

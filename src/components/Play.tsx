@@ -48,6 +48,11 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
   const [state, setState] = useState<GameState | null>(null);
   const [showPath, setShowPath] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  // countdown: 3→2→1→0 ("GO") then null (gone). The game loop reads the ref so
+  // the canvas stays frozen (isPausedRef=true) until the overlay disappears.
+  const [countdown, setCountdown] = useState<3 | 2 | 1 | 0 | null>(null);
+  const countdownRef = useRef<3 | 2 | 1 | 0 | null>(null);
+  const countdownTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [scorePopups, setScorePopups] = useState<ScorePopup[]>([]);
   const popupIdRef = useRef(0);
   const lastProcessedPickupAtRef = useRef(0);
@@ -107,7 +112,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     let cancelled = false;
     assetsReadyRef.current = false;
 
-    preloadImages(collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, bonusTypes)).then(() => {
+    preloadImages(collectGameAssetUrls(cargoTypes, engines, walls, systemAssets, bonusTypes), { prune: true }).then(() => {
       if (!cancelled) {
         assetsReadyRef.current = true;
         needsRedrawRef.current = true;
@@ -133,10 +138,38 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
     collectedCargoSetRef.current = new Set();
     collectedBonusSetRef.current = new Set();
     setIsPaused(false);
-    isPausedRef.current = false;
+    isPausedRef.current = true; // held frozen until countdown finishes
     resetTimingRef.current = true;
     needsRedrawRef.current = true;
+
+    // Cancel any countdown still in flight from a previous start/retry.
+    countdownTimersRef.current.forEach(clearTimeout);
+    countdownTimersRef.current = [];
+
+    // Countdown 3 → 2 → 1 → GO (0) → release
+    const steps: Array<3 | 2 | 1 | 0> = [3, 2, 1, 0];
+    steps.forEach((n, i) => {
+      countdownTimersRef.current.push(setTimeout(() => {
+        setCountdown(n);
+        countdownRef.current = n;
+        needsRedrawRef.current = true;
+      }, i * 1000));
+    });
+    // After GO has shown for 600 ms, clear the overlay and start the game.
+    countdownTimersRef.current.push(setTimeout(() => {
+      setCountdown(null);
+      countdownRef.current = null;
+      isPausedRef.current = false;
+      resetTimingRef.current = true;
+      needsRedrawRef.current = true;
+    }, 3 * 1000 + 600));
   }, [map]);
+
+  // Clear any pending countdown timers when the screen unmounts.
+  useEffect(() => () => {
+    countdownTimersRef.current.forEach(clearTimeout);
+    countdownTimersRef.current = [];
+  }, []);
 
   useEffect(() => {
     initGame();
@@ -194,8 +227,17 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
       engines.find((e) => e.id === map.selectedEngineId) || engines[0];
     const gridBackground = createGridBackground(canvas.width, canvas.height, map.width, map.height);
 
+    // Car obstacle paths are fixed for the level — compute once instead of
+    // re-allocating an array per car on every animation frame.
+    const carPaths = new Map<string, { x: number; y: number }[]>(
+      (map.carObstacles ?? []).map((c) => [c.id, computeCarPath(c)]),
+    );
+
     let staticLayer: HTMLCanvasElement | null = null;
     let staticLayerGateOpen: boolean | null = null;
+    // Track the asset-readiness the static layer was built at, so it's rebuilt
+    // once when images finish loading — but NOT on every forced redraw.
+    let staticLayerAssetsReady = false;
 
     const drawWallCell = (
       target: CanvasRenderingContext2D,
@@ -260,7 +302,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
 
       // Roads are static — draw before walls so walls overdraw if overlapping.
       for (const car of (map.carObstacles ?? [])) {
-        const path = computeCarPath(car);
+        const path = carPaths.get(car.id)!;
         const isH = car.startPos.y === car.endPos.y;
         const edgeImg = systemAssets.roadEdgeImage && imageCache[systemAssets.roadEdgeImage]?.complete
           ? imageCache[systemAssets.roadEdgeImage] : null;
@@ -335,9 +377,18 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
       if (!gameState) return;
 
       const gateOpen = gameState.collectedCount === gameState.totalCargoCount;
-      if (!staticLayer || staticLayerGateOpen !== gateOpen || needsRedrawRef.current) {
+      // Rebuild the cached background canvas only when its contents actually
+      // change — the gate opening/closing, or images finishing loading. Forced
+      // redraws (pause, path toggle, countdown) re-blit the existing layer
+      // instead of allocating a fresh full-size canvas every time.
+      if (
+        !staticLayer ||
+        staticLayerGateOpen !== gateOpen ||
+        staticLayerAssetsReady !== assetsReadyRef.current
+      ) {
         staticLayer = buildStaticLayer(gateOpen);
         staticLayerGateOpen = gateOpen;
+        staticLayerAssetsReady = assetsReadyRef.current;
       }
 
       ctx.drawImage(staticLayer, 0, 0);
@@ -401,7 +452,7 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
       for (const carDef of (map.carObstacles ?? [])) {
         const cs = (gameState.carObstacleStates ?? []).find((c) => c.id === carDef.id);
         if (!cs) continue;
-        const path = computeCarPath(carDef);
+        const path = carPaths.get(carDef.id)!;
         const isH = carDef.startPos.y === carDef.endPos.y;
         const prev = path[cs.prevPathIndex] ?? path[cs.pathIndex];
         const curr = path[cs.pathIndex];
@@ -612,6 +663,18 @@ export const Play: React.FC<PlayProps> = ({ map, cargoTypes, bonusTypes, engines
           height={map.height * GRID_SIZE}
           className="block"
         />
+
+        {countdown !== null && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span
+              key={countdown}
+              className="play-countdown font-black select-none"
+              style={{ fontSize: '10rem', lineHeight: 1, color: countdown === 0 ? '#16a34a' : '#172554' }}
+            >
+              {countdown === 0 ? t('play.go') : countdown}
+            </span>
+          </div>
+        )}
 
         {scorePopups.map((popup) => (
           <div
