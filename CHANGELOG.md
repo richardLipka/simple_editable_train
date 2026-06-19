@@ -5,6 +5,29 @@ All notable changes to **Trains Fluent** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-06-19
+
+### Added
+
+- **Brightness enhancement tool in the sketch pad** — a new **Sun** toolbar button opens a gamma-correction panel. A 0–100 % slider lifts shadows and midtones with a non-linear curve (gamma 1.0 → 0.35) while preserving colour saturation: the correction is applied to the HSV value channel so channel ratios (hue/saturation) stay constant. Preview is live off an immutable baseline snapshot; **Apply** commits to undo history; **Reset** reverts without touching history.
+- **Flip horizontal in the sketch pad** — a new **FlipHorizontal** toolbar button instantly mirrors the drawing left↔right (by the vertical axis) and commits the result to undo history. Implemented with a synchronous pixel-swap on `ImageData` — no async round-trip through a data URL.
+- **Transparent stroke and fill in the sketch pad** — a red-slash swatch in the stroke/fill palettes sets the active colour to transparent. Pencil and eraser tools `clearRect` with it (erase to transparency); shape tools switch to `destination-out` compositing so the outline subtracts alpha instead of painting. Flood fill floods to alpha 0.
+- **3-2-1-GO countdown before each level** — a full-screen animated overlay counts down 3 → 2 → 1 → GO before gameplay begins, giving the player time to orient. Fires on first game start and on every retry/next level. All countdown timers are tracked via `useRef` and cleared on unmount to prevent state updates after the component is gone.
+- **Campaign button on the main menu** — the decorative large play icon above "Spustit kampaň" is now a real `<button>` that launches the campaign directly.
+
+### Changed
+
+- **System asset action buttons are now a 2×2 grid** in the Settings panel: Camera / Upload on the first row, Draw / Emoji on the second. Previously the four buttons ran in a single horizontal row that was cramped on narrow screens.
+
+### Fixed
+
+- **Transparent images displayed as white when reopened in the sketch pad** — the mount effect no longer paints a white paper background before drawing an existing asset; it clears to transparent so alpha regions survive the round-trip.
+- **Intermittent out-of-memory during play** — several leaks eliminated:
+  - Image cache was unbounded; every asset edit produced a new data URL that accumulated in `globalCache` across edit→play cycles. `pruneImageCache` now evicts any URL not in the current asset set on each preload.
+  - The static background layer was rebuilt on every frame during a countdown pause; rebuilds are now guarded to gate-flip or assets-ready transitions only.
+  - Car-obstacle paths were recomputed every animation frame; they are now precomputed once into a `Map` at level init.
+  - Countdown `setTimeout` handles were not tracked, leaking timers across retries; they are now stored in a `useRef` array and cleared before each new countdown.
+
 ## [1.6.0] - 2026-06-18
 
 ### Changed

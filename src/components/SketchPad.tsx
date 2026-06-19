@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers, Wand2, Delete, Sun } from 'lucide-react';
+import { Pencil, Eraser, Square, Circle, Minus, PaintBucket, Trash2, Save, X, Undo2, Palette, Layers, Wand2, Delete, Sun, FlipHorizontal2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SKETCH_LOGICAL_SIZE, SKETCH_DISPLAY_SIZE, SKETCH_PIXEL_UNIT, encodeCanvas } from '../utils/imageEncoding';
 
@@ -493,6 +493,33 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
     setBrightness(0);
   };
 
+  // Mirror the canvas contents left↔right (flip by the vertical axis).
+  // Operates directly on ImageData so it's synchronous and pixel-perfect.
+  const flipHorizontal = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+    const W = CANVAS_SIZE;
+    const H = CANVAS_SIZE;
+    const imageData = ctx.getImageData(0, 0, W, H);
+    const src = imageData.data;
+    const flipped = new Uint8ClampedArray(src.length);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const si = (y * W + x) * 4;
+        const di = (y * W + (W - 1 - x)) * 4;
+        flipped[di]     = src[si];
+        flipped[di + 1] = src[si + 1];
+        flipped[di + 2] = src[si + 2];
+        flipped[di + 3] = src[si + 3];
+      }
+    }
+    const out = ctx.createImageData(W, H);
+    out.data.set(flipped);
+    ctx.putImageData(out, 0, 0);
+    saveToHistory();
+  };
+
   const selectTool = (newTool: Tool) => {
     if (newTool !== 'WAND') clearSelection();
     // Leaving brightness without applying reverts the live preview.
@@ -685,6 +712,7 @@ export const SketchPad: React.FC<SketchPadProps> = ({ onSave, onCancel, initialI
           <ToolButton active={tool === 'FILL'} onClick={() => selectTool('FILL')} icon={<PaintBucket size={20} />} label={t('sketchpad.fill')} />
           <ToolButton active={tool === 'WAND'} onClick={() => selectTool('WAND')} icon={<Wand2 size={20} />} label={t('sketchpad.magic_wand')} />
           <ToolButton active={tool === 'BRIGHTNESS'} onClick={() => selectTool('BRIGHTNESS')} icon={<Sun size={20} />} label={t('sketchpad.brightness')} />
+          <ToolButton active={false} onClick={flipHorizontal} icon={<FlipHorizontal2 size={20} />} label={t('sketchpad.flip_h')} />
           <div className="h-px bg-blue-200 my-2 hidden md:block" />
           <ToolButton active={false} onClick={undo} icon={<Undo2 size={20} />} label={t('sketchpad.undo')} disabled={history.length <= 1} />
           <ToolButton active={false} onClick={clear} icon={<Trash2 size={20} />} label={t('sketchpad.clear')} />

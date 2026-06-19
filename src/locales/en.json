@@ -224,6 +224,7 @@
     "brightness_hint": "Brightens shadows and midtones (gamma) while keeping colours vivid and highlights intact — great for dark or underexposed photos. Apply to commit.",
     "apply": "Apply",
     "reset": "Reset",
+    "flip_h": "Flip Horizontal",
     "undo": "Undo",
     "clear": "Clear",
     "brush_size": "Brush Size",

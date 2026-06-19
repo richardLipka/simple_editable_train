@@ -224,6 +224,7 @@
     "brightness_hint": "Zesvětlí stíny a střední tóny (gama), zachová sytost barev i světlé části — ideální pro tmavé nebo podexponované fotky. Potvrďte tlačítkem Použít.",
     "apply": "Použít",
     "reset": "Vrátit",
+    "flip_h": "Překlopit vodorovně",
     "undo": "Zpět",
     "clear": "Vymazat",
     "brush_size": "Velikost štětce",
